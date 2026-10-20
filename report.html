@@ -1,0 +1,314 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style><script>window.__KC_PREFIXES=['invites/','config/','gifts/','sp/','sg/','st/','arrive/'];</script><script>/* Stand-in for the Claude page runtime: the same claude.use('db') / ('downloads') calls,
+   backed by the 冠成 Apps Script + Google Sheet, with a shared passcode. */
+(()=>{
+const API='https://script.google.com/macros/s/AKfycbx4J4jwRwaeZ1l8qbJXbwGf486TUU8jgg4FR1YHfr9CZgAne3XlDPVl-ayJx8q2mGw/exec';
+const PREFIXES=window.__KC_PREFIXES||null;
+const KEYK='kc37-passcode';
+let key=null;try{key=localStorage.getItem(KEYK);}catch(_){}
+async function call(body,tries=0){
+  let r;try{r=await fetch(API,{method:'POST',body:JSON.stringify({...body,key})});}
+  catch(e){if(tries<2){await new Promise(s=>setTimeout(s,1200*(tries+1)));return call(body,tries+1);}const x=new Error('network');x.code='unavailable';throw x;}
+  let j;try{j=await r.json();}catch(_){const x=new Error('bad response');x.code='unavailable';throw x;}
+  if(!j.ok){const x=new Error(j.error||'error');x.code=j.error==='bad_key'?'invalid_argument':'unavailable';x.badKey=j.error==='bad_key';throw x;}
+  return j;
+}
+window.__kcCall=call;
+
+// ---------- passcode gate ----------
+let readyRes;const ready=new Promise(r=>readyRes=r);
+function gate(msg){
+  const d=document.createElement('div');
+  d.style.cssText='position:fixed;inset:0;z-index:99;display:grid;place-items:center;padding:16px;background:rgba(30,10,12,.72)';
+  d.innerHTML=`<form style="background:#FFFDF9;color:#2E2622;border-radius:18px;border-top:4px solid #7A1520;padding:26px 24px;max-width:380px;width:100%;display:flex;flex-direction:column;gap:12px;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;box-shadow:0 24px 70px rgba(0,0,0,.4)">
+    <div style="font-family:'Noto Serif TC',serif;font-size:22px;font-weight:900;letter-spacing:.06em">請輸入通關密碼</div>
+    <div style="font-size:15px;color:#5C514A">冠成尾牙內部使用，密碼請向負責同仁索取。這台裝置輸入一次就會記住。</div>
+    <input id="kcPass" autocomplete="current-password" type="password" style="font:inherit;font-size:18px;padding:10px 12px;border:1px solid #D9BF8A;border-radius:10px" aria-label="通關密碼">
+    <div id="kcErr" style="color:#B5541B;font-size:14px;min-height:1em">${msg||''}</div>
+    <button style="font:inherit;font-size:17px;font-weight:700;padding:10px;border:none;border-radius:999px;background:#7A1520;color:#F6E7C8;cursor:pointer">進入</button></form>`;
+  document.body.appendChild(d);const f=d.querySelector('form');setTimeout(()=>d.querySelector('input').focus(),0);
+  f.onsubmit=async e=>{e.preventDefault();const v=d.querySelector('input').value.trim();if(!v)return;key=v;d.querySelector('#kcErr').textContent='確認中…';
+    try{await call({op:'list',since:Date.now()+86400000});try{localStorage.setItem(KEYK,key);}catch(_){}d.remove();readyRes();}
+    catch(err){d.querySelector('#kcErr').textContent=err.badKey?'密碼不對，請再確認一次。':'連不上伺服器，請檢查網路後再試。';}};
+}
+async function start(){
+  if(key){try{await call({op:'list',since:Date.now()+86400000});readyRes();return;}catch(e){if(!e.badKey){readyRes();return;}}}
+  gate(key?'密碼已變更，請重新輸入。':'');
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
+window.kcLogout=()=>{try{localStorage.removeItem(KEYK);}catch(_){}location.reload();};
+
+// ---------- document store with polling ----------
+const cache=new Map();           // "coll/id" -> data
+const colL=new Map(),docL=new Map();
+const pend=new Map();            // key -> {json, waiters:[]}
+const inflight=new Set();
+let since=0,firstDone=false,firstRes;const first=new Promise(r=>firstRes=r);
+const depth=p=>p.split('/').length;
+const snapOf=(id,v)=>({id,exists:v!==undefined,data:()=>v,metadata:{fromCache:false,hasPendingWrites:false}});
+function colSnap(c){const docs=[];cache.forEach((v,k)=>{if(k.startsWith(c+'/')&&depth(k)===depth(c)+1)docs.push(snapOf(k.slice(c.length+1),v));});
+  docs.sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);return{docs,size:docs.length,empty:!docs.length,docChanges:()=>[],metadata:{fromCache:false,hasPendingWrites:false}};}
+function emit(keys){const cs=new Set(),ds=new Set();keys.forEach(k=>{ds.add(k);cs.add(k.slice(0,k.lastIndexOf('/')));});
+  cs.forEach(c=>(colL.get(c)||[]).forEach(fn=>{try{fn(colSnap(c));}catch(e){console.error(e);}}));
+  ds.forEach(d=>(docL.get(d)||[]).forEach(fn=>{try{fn(snapOf(d.split('/').pop(),cache.get(d)));}catch(e){console.error(e);}}));}
+async function poll(){
+  try{const j=await call({op:'list',since,prefixes:PREFIXES});
+    const ch=[];
+    j.docs.forEach(d=>{if(pend.has(d.k)||inflight.has(d.k))return;
+      if(d.del){if(cache.has(d.k)){cache.delete(d.k);ch.push(d.k);}}
+      else{const cur=cache.get(d.k);if(cur===undefined||JSON.stringify(cur)!==d.json){try{cache.set(d.k,JSON.parse(d.json));ch.push(d.k);}catch(_){}}}});
+    since=j.now-4000;
+    if(!firstDone){firstDone=true;firstRes();colL.forEach((fns,c)=>fns.forEach(fn=>fn(colSnap(c))));docL.forEach((fns,d)=>fns.forEach(fn=>fn(snapOf(d.split('/').pop(),cache.get(d)))));}
+    else if(ch.length)emit(ch);
+    setStatus('');
+  }catch(e){if(e.badKey){gate('密碼已變更，請重新輸入。');return;}setStatus('offline');}
+  setTimeout(poll,document.hidden?30000:6000);
+}
+ready.then(poll);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&firstDone)poll();});
+let flushT=null;
+function queue(k,json){return new Promise((res,rej)=>{const p=pend.get(k)||{waiters:[]};p.json=json;p.waiters.push({res,rej});pend.set(k,p);clearTimeout(flushT);flushT=setTimeout(flush,250);});}
+async function flush(){if(!pend.size)return;const items=[...pend.entries()].slice(0,150);items.forEach(([k])=>{pend.delete(k);inflight.add(k);});
+  try{await call({op:'write',writes:items.map(([k,p])=>({k,json:p.json}))});items.forEach(([,p])=>p.waiters.forEach(w=>w.res()));}
+  catch(e){items.forEach(([k,p])=>p.waiters.forEach(w=>w.rej(e)));}
+  finally{items.forEach(([k])=>inflight.delete(k));if(pend.size)flush();}}
+function setOne(k,data){const d=JSON.parse(JSON.stringify(data));cache.set(k,d);emit([k]);return queue(k,JSON.stringify(d));}
+function delOne(k){cache.delete(k);emit([k]);return queue(k,null);}
+function docRef(path){return{id:path.split('/').pop(),path,
+  set:d=>setOne(path,d),
+  update:d=>setOne(path,{...(cache.get(path)||{}),...d}),
+  delete:()=>delOne(path),
+  get:async()=>{await first;return snapOf(path.split('/').pop(),cache.get(path));},
+  onSnapshot:(fn)=>{if(!docL.has(path))docL.set(path,[]);docL.get(path).push(fn);if(firstDone)setTimeout(()=>fn(snapOf(path.split('/').pop(),cache.get(path))),0);return()=>{const a=docL.get(path);a.splice(a.indexOf(fn),1);};},
+  collection:c=>colRef(path+'/'+c)};}
+function colRef(c){return{path:c,doc:id=>docRef(c+'/'+(id||Math.random().toString(36).slice(2,12))),
+  add:async d=>{const r=docRef(c+'/'+Math.random().toString(36).slice(2,12));await r.set(d);return r;},
+  get:async()=>{await first;return colSnap(c);},
+  onSnapshot:(fn)=>{if(!colL.has(c))colL.set(c,[]);colL.get(c).push(fn);if(firstDone)setTimeout(()=>fn(colSnap(c)),0);return()=>{const a=colL.get(c);a.splice(a.indexOf(fn),1);};}};}
+const db={doc:docRef,collection:colRef};
+window.addEventListener('beforeunload',e=>{if(pend.size||inflight.size){e.preventDefault();e.returnValue='';}});
+
+// ---------- connection badge ----------
+let badge=null;
+function setStatus(s){if(!badge){badge=document.createElement('div');badge.style.cssText='position:fixed;right:max(12px,env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:60;background:#B5541B;color:#fff;border-radius:999px;padding:6px 14px;font:600 14px "Noto Sans TC",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25)';badge.hidden=true;document.body.appendChild(badge);}
+  badge.hidden=!s;badge.textContent='⚠️ 網路中斷，恢復後會自動同步';}
+
+// ---------- downloads ----------
+const downloads={save:async({filename,data})=>{
+  const type=/\.html?$/i.test(filename)?'text/html;charset=utf-8':/\.xlsx$/i.test(filename)?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':/\.json$/i.test(filename)?'application/json':/\.jpe?g$/i.test(filename)?'image/jpeg':'application/octet-stream';
+  const blob=data instanceof Blob?data:new Blob([data],{type});const url=URL.createObjectURL(blob);
+  if(/\.html?$/i.test(filename)){const w=window.open(url,'_blank');if(w){setTimeout(()=>URL.revokeObjectURL(url),60000);return;}}
+  const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}};
+
+window.claude={use:async n=>{if(n==='db'){await ready;return db;}if(n==='downloads')return downloads;return null;}};
+})();
+</script></head><body><title>冠成尾牙報名與贊助</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Noto+Serif+TC:wght@500;700;900&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+/* Layout: lacquer cover with this year's totals, then three ledgers (報名明細 / 贊助品 / 年度比較) behind tabs, export at the top right. */
+:root{
+  --paper:#FAF6EE; --sheet:#FFFDF9; --sunk:#F3ECDF; --hair:#E6DACA;
+  --ink:#2E2622; --ink-2:#5C514A; --muted:#8C7F74;
+  --lacquer:#7A1520; --lacquer-deep:#4E0B13; --on-lacquer:#F6E7C8;
+  --gold:#A8843F; --gold-line:#D9BF8A; --gold-pale:#F4E7CB;
+  --ok:#2F6F4A; --ok-pale:#E3EFE6; --warn:#B5541B; --warn-pale:#F8E8DC;
+  --display:"Noto Serif TC","Songti TC","PMingLiU",serif;
+  --body:"Noto Sans TC","Microsoft JhengHei","PingFang TC",system-ui,sans-serif;
+  --num:"Cormorant Garamond","Times New Roman",serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#16110F; --sheet:#1F1916; --sunk:#29211D; --hair:#3A302A; --ink:#F1E9DF; --ink-2:#CDBFB1; --muted:#9E9084;
+  --lacquer:#5E1019; --lacquer-deep:#3A070E; --on-lacquer:#F3E2BF; --gold:#D8B46E; --gold-line:#8C7340; --gold-pale:#3A2F1C;
+  --ok:#6CC08F; --ok-pale:#1F3328; --warn:#F09A62; --warn-pale:#3B2619; color-scheme:dark}}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+button{font:inherit;font-size:15.5px;border:1px solid var(--hair);background:var(--sheet);color:var(--ink);border-radius:999px;padding:7px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;min-height:42px;white-space:nowrap}
+button:hover{border-color:var(--gold)}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+button.primary{background:var(--lacquer);border-color:var(--lacquer);color:var(--on-lacquer);font-weight:700}
+button.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+button.sm{min-height:32px;padding:3px 12px;font-size:14px}
+input,textarea{font:inherit;font-size:15.5px;color:var(--ink);background:var(--sheet);border:1px solid var(--hair);border-radius:10px;padding:7px 11px}
+.cover{background:radial-gradient(120% 140% at 85% 0%,var(--lacquer) 0%,var(--lacquer-deep) 75%);color:var(--on-lacquer)}
+.cover .in{max-width:1180px;margin:0 auto;padding-block:26px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.frame{border:1px solid color-mix(in srgb,var(--gold-line) 70%,transparent);outline:1px solid color-mix(in srgb,var(--gold-line) 35%,transparent);outline-offset:-7px;border-radius:4px;padding:22px 26px;display:flex;flex-direction:column;gap:16px}
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.eyebrow{font-family:var(--body);font-size:15px;letter-spacing:.04em;color:var(--gold-line)}
+.eyebrow a{display:inline-flex;align-items:center;color:var(--lacquer-deep);background:var(--on-lacquer);text-decoration:none;font-size:18px;font-weight:700;padding:6px 16px;border-radius:999px;margin-bottom:6px}
+h1{margin:2px 0 0;font-family:var(--display);font-weight:900;font-size:clamp(30px,4.6vw,42px);letter-spacing:.1em;line-height:1.2}
+.kp{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+@media (max-width:760px){.kp{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kp div{border-top:1px solid color-mix(in srgb,var(--gold-line) 50%,transparent);padding-top:8px}
+.kp b{display:block;font-family:var(--num);font-size:44px;line-height:1.05;color:#fff;font-weight:600;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1}
+.kp span{font-size:14.5px;opacity:.88}
+.wrap{max-width:1180px;margin:-36px auto 0;padding-block:0 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px;position:relative}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:var(--sheet);border:1px solid var(--hair);border-radius:16px;padding:8px 10px;box-shadow:0 10px 30px -18px rgba(78,11,19,.35)}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tabs button{border-color:transparent}
+.tabs button.on{background:var(--ink);color:var(--paper)}
+.tabs button b{font-family:var(--num);font-size:18px;font-weight:600;margin-left:2px;font-variant-numeric:lining-nums}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+.tw{overflow-x:auto;background:var(--sheet);border:1px solid var(--hair);border-radius:14px}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th{background:var(--gold-pale);color:var(--lacquer-deep);font-size:13.5px;font-weight:700;letter-spacing:.04em;text-align:left;padding:9px 12px;border-bottom:1px solid var(--gold-line);white-space:nowrap;position:sticky;top:0}
+td{padding:9px 12px;border-top:1px solid var(--hair);vertical-align:top}
+tbody tr:hover td{background:color-mix(in srgb,var(--gold-pale) 35%,var(--sheet))}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td b{font-family:var(--display)}
+.mt{color:var(--muted);font-size:14px}
+.sm2{font-size:14px;color:var(--ink-2)}
+.pill{display:inline-block;font-size:13px;font-weight:700;border-radius:6px;padding:1px 8px;border:1px solid}
+.yes{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,transparent);background:var(--ok-pale)}
+.no{color:var(--muted);border-color:var(--hair)}
+.up{color:var(--ok);font-weight:700}.down{color:var(--warn);font-weight:700}
+.chk{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:15px}
+.chk input{width:20px;height:20px;accent-color:var(--ok)}
+.empty{padding:40px 20px;text-align:center;color:var(--muted)}
+.note{font-size:14.5px;color:var(--muted)}
+.overlay{position:fixed;inset:0;background:rgba(30,10,12,.5);display:grid;place-items:center;z-index:30;padding:16px}
+.dlg{background:var(--sheet);border-radius:18px;max-width:560px;width:100%;padding:22px 24px;display:flex;flex-direction:column;gap:12px;border-top:4px solid var(--lacquer)}
+.dlg h3{margin:0;font-family:var(--display);font-size:22px}
+.f{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px;align-items:center}
+.f label{font-weight:700;font-size:15px}.f input{width:100%}
+.toast{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:9px 18px;border-radius:999px;font-size:15px;z-index:50}
+.wish{border-left:3px solid var(--gold);padding:6px 14px;background:var(--sheet);border-radius:0 10px 10px 0}
+.wish small{display:block;color:var(--muted);font-size:14px}
+.wishes{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+</style>
+
+<section class="cover"><div class="in"><div class="frame">
+  <div class="top"><div><div class="eyebrow"><a href="admin.html">← 工作台</a></div><h1>報名與贊助</h1></div>
+    <div class="note" style="color:var(--on-lacquer);opacity:.85" id="asof">讀取中…</div></div>
+  <div class="kp" id="kp"></div>
+</div></div></section>
+
+<main class="wrap">
+  <div class="bar">
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div class="acts"><button id="bAddGift">＋ 新增贊助</button><button class="primary" id="bXlsx">匯出年度總結 Excel</button></div>
+  </div>
+  <div id="view"></div>
+</main>
+<div class="overlay" id="ovl" hidden><div class="dlg" id="dlg"></div></div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const S_=v=>String(v??'').trim();
+const GROUPS=['廠商','外包師傅','協力廠商','政商','教育界','廠牌高層','社團親友','柏緯朋友','員工','公益','其他貴賓','網站新報名'];
+let giftsLoaded=false,WEB=[],INV=[],GIFTS=new Map(),SP=[],SG=[],ST=[],ARR=[],CFG={},db=null,tab='web',webAt=null;
+const H=(r,re)=>{const k=Object.keys(r).find(h=>re.test(h));return k?S_(r[k]):'';};
+const ukey=s=>String(s||'').replace(/（.*?）|\(.*?\)/g,'').replace(/股份有限公司|有限公司|股份|公司|企業社|台灣|銷售|\s/g,'').toLowerCase();
+const hash=s=>{let h=5381;for(const c of s)h=((h*33)^c.charCodeAt(0))>>>0;return h.toString(36);};
+const splitN=v=>S_(v).split(/[，,、\n]/).map(S_).filter(Boolean);
+const countMark=(names,re)=>(S_(names).match(re)||[]).length;
+function toast(m){const d=document.createElement('div');d.className='toast';d.textContent=m;document.body.appendChild(d);setTimeout(()=>d.remove(),2600);}
+function webRecs(){return WEB.map(r=>({ts:H(r,/時間戳記/),unit:H(r,/公司|單位名稱/),cat:H(r,/類別/),person:H(r,/貴姓|填表人/),title:H(r,/職稱/),attend:H(r,/是否出席/),
+  count:parseInt(H(r,/總參加人數/),10)||0,names:H(r,/參加人員|名單/),veg:parseInt(H(r,/素食/),10)||0,nobeef:parseInt(H(r,/不吃牛/),10)||0,child:parseInt(H(r,/兒童椅/),10)||0,
+  sponsor:H(r,/是否.*贊助/),gifts:[H(r,/獎品[（(]?一/),H(r,/獎品[（(]?二/)].join('；').split('；').map(S_).filter(Boolean),due:H(r,/交付/),wish:H(r,/祝賀/),note:H(r,/其他需求|備註/)})).filter(r=>r.unit||r.person);}
+const isYes=r=>!/無法|不克|否/.test(r.attend);
+function invFor(unit){const k=ukey(unit);if(k.length<2)return null;const c=INV.filter(i=>!i.merge);return c.find(i=>ukey(i.unit)===k)||c.find(i=>{const a=ukey(i.unit);return a.length>=2&&(a.includes(k)||k.includes(a));})||null;}
+// website gifts become tracked gift rows automatically
+async function syncWebGifts(){if(!db||!giftsLoaded)return;const recs=webRecs();
+  for(const r of recs){for(const g of r.gifts){const id='w'+hash(r.ts+'|'+r.unit+'|'+g);if(!GIFTS.has(id)){const d={unit:r.unit,item:g,due:r.due,received:false,note:'',src:'網站報名',person:[r.person,r.title].filter(Boolean).join(' '),at:Date.now()};GIFTS.set(id,d);try{await db.collection('gifts').doc(id).set(d);}catch(_){}}}}}
+function giftList(){return [...GIFTS.entries()].map(([id,g])=>({id,...g})).sort((a,b)=>(a.at||0)-(b.at||0));}
+function stats(){const recs=webRecs();const yesW=recs.filter(isYes);
+  const att=INV.filter(i=>!i.merge&&i.reply==='yes');const ppl=att.reduce((a,i)=>a+(Number(i.count)||0),0);
+  const gl=giftList();return{recs,yesW,att,ppl,gl,sponsors:new Set(gl.map(g=>ukey(g.unit))).size,recv:gl.filter(g=>g.received).length};}
+function render(){const s=stats();
+  $('kp').innerHTML=[[s.recs.length,'網站報名筆數'],[s.ppl,'確定出席人數'],[s.att.length,'出席單位'],[s.sponsors,'贊助單位'],[`${s.recv}/${s.gl.length}`,'贊助品已收到']].map(([v,l])=>`<div><b>${v}</b><span>${l}</span></div>`).join('');
+  $('asof').textContent=webAt?`網站報名讀取時間 ${webAt.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'})}・名冊資料自動更新`:'讀取中…';
+  const T=[['web','網站報名',s.recs.length],['gift','贊助品',s.gl.length],['cmp','年度比較',''],['wish','祝賀詞',s.recs.filter(r=>r.wish).length]];
+  $('tabs').innerHTML=T.map(([k,l,n])=>`<button role="tab" class="${tab===k?'on':''}" aria-selected="${tab===k}" data-tab="${k}">${l}${n!==''?` <b>${n}</b>`:''}</button>`).join('');
+  $('view').innerHTML=tab==='web'?webView(s):tab==='gift'?giftView(s):tab==='cmp'?cmpView(s):wishView(s);
+}
+function webView(s){if(!s.recs.length)return '<div class="tw"><div class="empty">網站上還沒有人報名。報名網址：leanna0303.github.io/guancheng-weiya</div></div>';
+  return `<div class="tw"><table><thead><tr><th>報名時間</th><th>單位</th><th>填表人</th><th>出席</th><th class="n">人數</th><th>參加名單</th><th class="n">素</th><th class="n">不吃牛</th><th class="n">兒童椅</th><th>贊助</th><th>其他需求</th></tr></thead><tbody>
+  ${[...s.recs].reverse().map(r=>`<tr><td class="mt" style="white-space:nowrap">${esc(r.ts)}</td><td><b>${esc(r.unit)}</b><div class="mt">${esc(r.cat)}</div></td><td class="sm2">${esc([r.person,r.title].filter(Boolean).join(' '))}</td>
+   <td>${isYes(r)?'<span class="pill yes">出席</span>':'<span class="pill no">不克</span>'}</td><td class="n">${isYes(r)?r.count:''}</td><td class="sm2">${esc(r.names)}</td>
+   <td class="n">${r.veg||''}</td><td class="n">${r.nobeef||''}</td><td class="n">${r.child||''}</td><td class="sm2">${esc(r.gifts.join('；'))}</td><td class="sm2">${esc(r.note)}</td></tr>`).join('')}</tbody></table></div>`;}
+function giftView(s){const gl=s.gl;
+  return `<p class="note" style="margin:0">網站上填的贊助品會自動列進來；電話或當面答應的請按「＋ 新增贊助」。東西收到後勾「已收到」。</p>
+  <div class="tw">${gl.length?`<table><thead><tr><th>單位</th><th>贊助品</th><th>預計交付</th><th>已收到</th><th>備註</th><th>去年贊助</th><th></th></tr></thead><tbody>
+  ${gl.map(g=>{const inv=invFor(g.unit);return `<tr><td><b>${esc(g.unit)}</b>${g.person?`<div class="mt">${esc(g.person)}</div>`:''}<div class="mt">${esc(g.src||'')}</div></td><td>${esc(g.item)}</td><td class="sm2" style="white-space:nowrap">${esc(g.due)}</td>
+   <td><label class="chk"><input type="checkbox" data-recv="${g.id}" ${g.received?'checked':''}>${g.received?'已收到':'未收到'}</label></td>
+   <td><input data-note="${g.id}" value="${esc(g.note)}" placeholder="例：已放倉庫、拆成三份紅包" style="width:100%;min-width:180px"></td>
+   <td class="mt">${esc(inv?inv.lyGift:'')}</td><td>${g.src==='手動'?`<button class="ghost sm" data-delg="${g.id}">刪除</button>`:''}</td></tr>`;}).join('')}</tbody></table>`:'<div class="empty">還沒有贊助品。</div>'}</div>`;}
+function cmpView(s){
+  const rows=GROUPS.map(g=>{const its=INV.filter(i=>i.group===g&&!i.merge);if(!its.length)return null;
+    const ly=its.reduce((a,i)=>a+(Number(i.lyCount)||0),0),ty=its.filter(i=>i.reply==='yes').reduce((a,i)=>a+(Number(i.count)||0),0);
+    return{g,inv:its.filter(i=>i.boss!=='no').length,units:its.filter(i=>i.reply==='yes').length,ty,ly,lyG:its.filter(i=>i.lyGift).length,tyG:new Set(s.gl.filter(x=>{const v=invFor(x.unit);return v&&v.group===g;}).map(x=>ukey(x.unit))).size};}).filter(Boolean);
+  const sum=k=>rows.reduce((a,r)=>a+r[k],0);
+  const d=(a,b)=>{const x=a-b;return x>0?`<span class="up">+${x}</span>`:x<0?`<span class="down">${x}</span>`:'<span class="mt">0</span>';};
+  return `<p class="note" style="margin:0">「去年」是 114 年度 Excel 的人數和贊助；「今年」是名冊上確定出席的人數，回覆還沒收齊前會比去年少。</p>
+  <div class="tw"><table><thead><tr><th>分類</th><th class="n">今年邀請</th><th class="n">已確定出席單位</th><th class="n">今年人數</th><th class="n">去年人數</th><th class="n">差異</th><th class="n">今年贊助單位</th><th class="n">去年贊助單位</th></tr></thead><tbody>
+  ${rows.map(r=>`<tr><td><b>${esc(r.g)}</b></td><td class="n">${r.inv}</td><td class="n">${r.units}</td><td class="n">${r.ty}</td><td class="n">${r.ly}</td><td class="n">${d(r.ty,r.ly)}</td><td class="n">${r.tyG}</td><td class="n">${r.lyG}</td></tr>`).join('')}
+  <tr><td><b>合計</b></td><td class="n"><b>${sum('inv')}</b></td><td class="n"><b>${sum('units')}</b></td><td class="n"><b>${sum('ty')}</b></td><td class="n"><b>${sum('ly')}</b></td><td class="n">${d(sum('ty'),sum('ly'))}</td><td class="n"><b>${sum('tyG')}</b></td><td class="n"><b>${sum('lyG')}</b></td></tr></tbody></table></div>`;}
+function wishView(s){const w=s.recs.filter(r=>r.wish);return w.length?`<div class="wishes">${w.map(r=>`<div class="wish">${esc(r.wish)}<small>— ${esc(r.unit)}${r.person?' '+esc(r.person):''}</small></div>`).join('')}</div>`:'<div class="tw"><div class="empty">還沒有祝賀詞。</div></div>';}
+
+document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.tab){tab=b.dataset.tab;render();return;}
+  if(b.dataset.delg){const id=b.dataset.delg;GIFTS.delete(id);render();try{await db.collection('gifts').doc(id).delete();}catch(_){toast('刪除失敗');}return;}});
+document.addEventListener('change',async e=>{const t=e.target;
+  if(t.dataset.recv){const g=GIFTS.get(t.dataset.recv);g.received=t.checked;g.recvAt=t.checked?new Date().toLocaleDateString('sv-SE'):'';render();try{await db.collection('gifts').doc(t.dataset.recv).set(g);}catch(_){toast('儲存失敗');}}
+  if(t.dataset.note){const g=GIFTS.get(t.dataset.note);g.note=S_(t.value);try{await db.collection('gifts').doc(t.dataset.note).set(g);toast('已儲存備註');}catch(_){toast('儲存失敗');}}});
+$('ovl').addEventListener('click',e=>{if(e.target===$('ovl'))$('ovl').hidden=true;});
+$('bAddGift').onclick=()=>{$('dlg').innerHTML=`<h3>新增贊助</h3><p class="note" style="margin:-4px 0 0">電話、LINE 或當面答應的贊助，例如「大中華董事長　現金 6000」。</p>
+  <div class="f"><label for="g_u">單位</label><input id="g_u" list="units"></div><datalist id="units">${INV.map(i=>`<option value="${esc(i.unit)}">`).join('')}</datalist>
+  <div class="f"><label for="g_i">贊助品</label><input id="g_i" placeholder="例：國際牌微波爐 ×1、現金 6000"></div>
+  <div class="f"><label for="g_d">預計交付</label><input id="g_d" placeholder="例：1/10 前送到店裡"></div>
+  <div class="acts" style="justify-content:flex-end"><button id="g_c">取消</button><button class="primary" id="g_ok">新增</button></div>`;$('ovl').hidden=false;$('g_u').focus();
+  $('g_c').onclick=()=>$('ovl').hidden=true;
+  $('g_ok').onclick=async()=>{const u=S_($('g_u').value),it=S_($('g_i').value);if(!u||!it){toast('請填單位和贊助品');return;}
+    const id='m'+Date.now().toString(36);const d={unit:u,item:it,due:S_($('g_d').value),received:false,note:'',src:'手動',person:'',at:Date.now()};GIFTS.set(id,d);$('ovl').hidden=true;tab='gift';render();
+    try{await db.collection('gifts').doc(id).set(d);toast('已新增');}catch(_){toast('儲存失敗');}};};
+
+// ---------- 年度總結 Excel ----------
+$('bXlsx').onclick=async()=>{if(typeof ExcelJS==='undefined'){toast('Excel 元件載入失敗，請重新整理');return;}
+  const s=stats();const wb=new ExcelJS.Workbook();wb.creator='冠成尾牙';
+  const red='FF7A1520',pale='FFF4E7CB';
+  const sheet=(name,cols,rows,opt={})=>{const ws=wb.addWorksheet(name,{views:[{state:'frozen',ySplit:1}]});ws.columns=cols.map(([h,w])=>({header:h,width:w}));
+    rows.forEach(r=>ws.addRow(r));const h=ws.getRow(1);h.font={bold:true,color:{argb:'FFFFFFFF'}};h.fill={type:'pattern',pattern:'solid',fgColor:{argb:red}};h.alignment={vertical:'middle',wrapText:true};h.height=24;
+    ws.eachRow((row,i)=>{if(i>1){row.alignment={vertical:'top',wrapText:true};if(i%2===0)row.eachCell(c=>c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFCF8F1'}});}});
+    if(rows.length)ws.autoFilter={from:{row:1,column:1},to:{row:1,column:cols.length}};return ws;};
+  const evt=CFG.date||'';
+  // 總覽
+  const ov=wb.addWorksheet('總覽');ov.columns=[{width:24},{width:16},{width:16},{width:16},{width:16},{width:16},{width:16}];
+  ov.addRow([`冠成家電尾牙 年度總結（${evt}）`]).font={bold:true,size:16,color:{argb:red}};ov.addRow([`匯出時間：${new Date().toLocaleString('zh-TW')}`]).font={color:{argb:'FF8C7F74'}};ov.addRow([]);
+  [['網站報名筆數',s.recs.length],['確定出席人數',s.ppl],['出席單位',s.att.length],['贊助單位',s.sponsors],['贊助品（已收到／總數）',`${s.recv} / ${s.gl.length}`],['座位已入座',SP.filter(p=>p.t).length],['當天報到',ARR.filter(a=>a.in).length]].forEach(r=>{const x=ov.addRow(r);x.getCell(1).font={bold:true};});
+  ov.addRow([]);const hh=ov.addRow(['分類','今年邀請','出席單位','今年人數','去年人數','差異','今年贊助單位']);hh.font={bold:true};hh.eachCell(c=>c.fill={type:'pattern',pattern:'solid',fgColor:{argb:pale}});
+  GROUPS.forEach(g=>{const its=INV.filter(i=>i.group===g&&!i.merge);if(!its.length)return;const ly=its.reduce((a,i)=>a+(Number(i.lyCount)||0),0),ty=its.filter(i=>i.reply==='yes').reduce((a,i)=>a+(Number(i.count)||0),0);
+    ov.addRow([g,its.filter(i=>i.boss!=='no').length,its.filter(i=>i.reply==='yes').length,ty,ly,ty-ly,new Set(s.gl.filter(x=>{const v=invFor(x.unit);return v&&v.group===g;}).map(x=>ukey(x.unit))).size]);});
+  // 邀請與回覆
+  const st=i=>i.boss==='no'?'不邀請':i.boss!=='yes'?'待老闆確認':!i.sent?'待發送':i.merge?`併入 ${i.merge}`:!i.reply?'等回覆':i.reply==='yes'?'出席':'不克出席';
+  const tyGift=i=>s.gl.filter(g=>{const v=invFor(g.unit);return v&&v.id===i.id;}).map(g=>g.item).join('；');
+  sheet('邀請與回覆',[['分類',10],['單位',24],['邀請對象',22],['邀請方式',9],['老闆確認',9],['發送日',11],['今年狀態',12],['今年人數',9],['今年名單',40],['素食',6],['不吃牛',7],['兒童椅',7],['今年贊助',30],['去年人數',9],['去年名單',40],['去年贊助',30],['備註',30]],
+    [...INV].sort((a,b)=>(GROUPS.indexOf(a.group)+99)%99-(GROUPS.indexOf(b.group)+99)%99||a.id.localeCompare(b.id)).map(i=>[i.group,i.unit,i.contact,i.channel,i.boss==='yes'?'邀請':i.boss==='no'?'不邀':'待確認',i.sentAt||'',st(i),i.reply==='yes'?Number(i.count)||0:'',S_(i.names),i.veg||'',countMark(i.names,/不吃牛/g)||'',countMark(i.names,/兒童椅/g)||'',tyGift(i),i.lyCount??'',S_(i.lyNames),S_(i.lyGift),[i.note,i.lyNote].filter(Boolean).join('；')]));
+  // 出席名單（每人一列）
+  const gById=new Map(SG.map(g=>[g.id,g])),tById=new Map(ST.map(t=>[t.id,t])),arr=new Set(ARR.filter(a=>a.in).map(a=>a.id));
+  const people=SP.length?SP.map(p=>{const g=gById.get(p.gid)||{};const t=tById.get(p.t);return[g.unit||'',g.catRaw||'',p.name,[p.veg?'素':'',p.nobeef?'不吃牛':'',p.child?'兒童椅':'',p.stage?'上台':'',p.mob?'行動不便':''].filter(Boolean).join('、'),t?t.no:'未安排',t?t.name||'':'',arr.has(p.id)?'✓':''];})
+    :INV.filter(i=>!i.merge&&i.reply==='yes').flatMap(i=>splitN(i.names).map(n=>[i.unit,i.group,n.replace(/[（(].*?[)）]/g,'').trim(),(n.match(/[（(](.*?)[)）]/g)||[]).map(x=>x.slice(1,-1)).join('、'),'','','']));
+  sheet('出席名單',[['單位',24],['類別',10],['姓名',18],['需求',16],['桌號',8],['桌名',16],['報到',6]],people);
+  sheet('贊助品',[['單位',24],['贊助品',40],['預計交付',16],['已收到',8],['收到日',11],['備註',30],['來源',10]],s.gl.map(g=>[g.unit,g.item,g.due||'',g.received?'✓':'',g.recvAt||'',g.note||'',g.src||'']));
+  sheet('網站報名原始資料',[['報名時間',18],['單位',24],['類別',12],['填表人',14],['職稱',10],['出席',10],['人數',6],['名單',40],['素',5],['不吃牛',6],['兒童椅',6],['贊助品',30],['交付日',12],['其他需求',24],['祝賀詞',40]],
+    s.recs.map(r=>[r.ts,r.unit,r.cat,r.person,r.title,r.attend,r.count,r.names,r.veg,r.nobeef,r.child,r.gifts.join('；'),r.due,r.note,r.wish]));
+  const buf=await wb.xlsx.writeBuffer();const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`冠成尾牙_年度總結_${(evt||'').replace(/\s/g,'')||new Date().toLocaleDateString('sv-SE')}.xlsx`;document.body.appendChild(a);a.click();a.remove();toast('已下載年度總結 Excel');};
+
+render();
+(async()=>{db=await claude.use('db');
+  db.collection('invites').onSnapshot(q=>{INV=q.docs.map(d=>({...d.data(),id:d.id}));render();});
+  db.collection('gifts').onSnapshot(q=>{GIFTS=new Map(q.docs.map(d=>[d.id,{...d.data()}]));giftsLoaded=true;render();});
+  db.collection('sp').onSnapshot(q=>{SP=q.docs.map(d=>({...d.data(),id:d.id}));});
+  db.collection('sg').onSnapshot(q=>{SG=q.docs.map(d=>({...d.data(),id:d.id}));});
+  db.collection('st').onSnapshot(q=>{ST=q.docs.map(d=>({...d.data(),id:d.id}));});
+  db.collection('arrive').onSnapshot(q=>{ARR=q.docs.map(d=>({...d.data(),id:d.id}));});
+  db.doc('config/event').onSnapshot(s=>{CFG=s.exists?s.data():{};});
+  const loadWeb=async()=>{try{const j=await window.__kcCall({op:'web'});WEB=j.rows||[];webAt=new Date();render();await new Promise(r=>setTimeout(r,1500));await syncWebGifts();render();}catch(_){toast('讀不到網站報名資料，稍後會再試');}};
+  await loadWeb();setInterval(loadWeb,60000);
+})();
+})();
+</script>
+</body></html>
