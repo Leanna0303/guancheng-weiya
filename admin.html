@@ -204,6 +204,16 @@ h3 small{font-family:var(--body);font-weight:500;font-size:14px;color:var(--mute
 .tlbar{display:flex;gap:8px;flex-wrap:wrap;margin:-2px 0 10px}
 .tlbar button{min-height:36px;font-size:14.5px}
 .tlbar button.on{background:var(--ink);color:var(--paper)}
+
+.ed input,.ed textarea{font:inherit;font-size:15.5px;color:var(--ink);background:var(--paper);border:1px solid var(--hair);border-radius:8px;padding:6px 10px;width:100%}
+.ed textarea{min-height:70px;resize:vertical}
+.ed .eh{display:grid;grid-template-columns:minmax(0,1fr) 110px 110px auto;gap:8px;align-items:end;padding:14px 18px;background:var(--gold-pale)}
+.ed .eh label,.ed .ei label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+.ed .ei{display:grid;grid-template-columns:minmax(0,2fr) 120px minmax(0,1.6fr) auto;gap:8px;align-items:end;padding:10px 18px;border-top:1px solid var(--hair)}
+@media (max-width:760px){.ed .eh,.ed .ei{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.ed .eh label:first-child,.ed .ei label:first-child,.ed .ei label:nth-child(3){grid-column:1/-1}}
+.ed .ef{display:flex;gap:8px;padding:10px 18px;border-top:1px solid var(--hair)}
+.edbar{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;background:var(--sheet);border:1px solid var(--lacquer);border-radius:999px;padding:8px 10px;box-shadow:0 10px 30px -10px rgba(0,0,0,.3);z-index:5}
+.btnx{color:var(--warn)!important}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
@@ -244,7 +254,7 @@ h3 small{font-family:var(--body);font-weight:500;font-size:14px;color:var(--mute
 
   <section>
     <h3>尾牙流程表<small>依尾牙日期自動算出每個階段的日期，做完可以打勾（大家看得到）</small></h3>
-    <div class="tlbar"><button id="tlNow" class="on">從現在的階段開始</button><button id="tlAll">顯示全部階段</button></div>
+    <div class="tlbar"><button id="tlNow" class="on">從現在的階段開始</button><button id="tlAll">顯示全部階段</button><button id="tlEdit" style="margin-left:auto">✏️ 編輯流程表</button></div>
     <div class="tl" id="tl"></div>
   </section>
 
@@ -298,6 +308,7 @@ let FLOW=null,CHK={},tlAll=false;
 const WD='日一二三四五六';
 const fmtD=d=>`${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）`;
 function renderFlow(){
+  if(EDIT)return;
   if(!FLOW){$('tl').innerHTML='<div class="steps" style="padding:20px;color:var(--muted)">流程表載入中…</div>';return;}
   const ev=rocDate(CFG.date);const today=new Date();today.setHours(0,0,0,0);
   const off=n=>{if(!ev)return null;const d=new Date(ev);d.setDate(d.getDate()+n);return d;};
@@ -311,10 +322,52 @@ function renderFlow(){
     const rel=s.from===0&&s.to===0?'D 當天':s.from>0?`D+${s.from}～${s.to} 天`:`D${s.from}～D${s.to} 天`;
     const badge=st==='past'?'已過':st==='now'?(dnow>=s.from?'現在這個階段':'下一個階段'):st==='next'?'接下來':'';
     return `<article class="stg ${st}"><header><h4>${esc(s.name)}<em>${rel}</em></h4><span class="when">${when}${badge?`<span class="badge">${badge}</span>`:''}</span></header>
-      <ul>${s.items.map((it,j)=>{const k='s'+ix+'_'+j;const ok=!!CHK[k];return `<li class="${ok?'ok':''}"><input type="checkbox" data-ck="${k}" ${ok?'checked':''} aria-label="${esc(it.t)}"><span class="it">${esc(it.t)}</span><span class="who">${esc(it.who)}</span>${it.tip?`<span class="tip">💡 ${esc(it.tip)}</span>`:''}</li>`;}).join('')}</ul></article>`;}).join('')||'<div class="steps" style="padding:20px;color:var(--muted)">所有階段都完成了</div>';
+      <ul>${s.items.map((it,j)=>{const k=itemKey(ix,j,it);const ok=!!CHK[k];return `<li class="${ok?'ok':''}"><input type="checkbox" data-ck="${k}" ${ok?'checked':''} aria-label="${esc(it.t)}"><span class="it">${esc(it.t)}</span><span class="who">${esc(it.who)}</span>${it.tip?`<span class="tip">💡 ${esc(it.tip)}</span>`:''}</li>`;}).join('')}</ul></article>`;}).join('')||'<div class="steps" style="padding:20px;color:var(--muted)">所有階段都完成了</div>';
   $('day').innerHTML=FLOW.day.map((t,j)=>{const k='d'+j;return `<label><input type="checkbox" data-ck="${k}" ${CHK[k]?'checked':''}>${esc(t)}</label>`;}).join('');
   $('notes').innerHTML=FLOW.notes.map(n=>`<div><b>${esc(n.h)}</b><ul>${n.l.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
 }
+
+let EDIT=null;
+const uidf=()=>'i'+Math.random().toString(36).slice(2,9);
+function itemKey(ix,j,it){return it.id?'k'+it.id:'s'+ix+'_'+j;}
+function renderEdit(){const E=EDIT;
+  $('tl').innerHTML=E.stages.map((s,ix)=>`<article class="stg ed" data-si="${ix}"><div class="eh">
+     <label>階段名稱<input data-f="name" value="${esc(s.name)}"></label>
+     <label>開始天數<input data-f="from" type="number" value="${s.from}"></label>
+     <label>結束天數<input data-f="to" type="number" value="${s.to}"></label>
+     <button class="btnx" data-delstage="${ix}">刪除階段</button></div>
+     ${s.items.map((it,j)=>`<div class="ei" data-ii="${j}"><label>工作項目<input data-g="t" value="${esc(it.t)}"></label><label>負責<input data-g="who" value="${esc(it.who)}"></label><label>注意事項（選填）<input data-g="tip" value="${esc(it.tip||'')}"></label><button class="btnx" data-delitem="${ix}_${j}" aria-label="刪除這項">刪除</button></div>`).join('')}
+     <div class="ef"><button data-additem="${ix}">＋ 新增工作項目</button><span class="mt" style="align-self:center;color:var(--muted);font-size:14px">天數：尾牙前 30 天填 -30，當天填 0，會後 3 天填 3</span></div></article>`).join('')+
+   `<button id="addStage">＋ 新增階段</button>
+   <article class="stg ed"><div class="eh" style="grid-template-columns:1fr"><b>尾牙當天確認清單（一行一項）</b></div><div style="padding:12px 18px"><textarea id="edDay" style="min-height:220px">${esc(E.day.join('\n'))}</textarea></div></article>
+   ${E.notes.map((n,k)=>`<article class="stg ed"><div class="eh" style="grid-template-columns:1fr auto"><label>注意事項標題<input data-nh="${k}" value="${esc(n.h)}"></label><button class="btnx" data-delnote="${k}">刪除</button></div><div style="padding:12px 18px"><textarea data-nl="${k}">${esc(n.l.join('\n'))}</textarea></div></article>`).join('')}
+   <button id="addNote">＋ 新增注意事項分類</button>
+   <div class="edbar"><span style="align-self:center;margin-right:auto;padding-left:10px;font-size:15px">編輯中・存檔後大家都會看到</span><button id="edCancel">取消</button><button class="btn primary" id="edSave">存檔</button></div>`;
+  $('day').parentElement.hidden=true;$('notes').parentElement.hidden=true;
+}
+function collectEdit(){const E=EDIT;
+  document.querySelectorAll('.ed[data-si]').forEach(el=>{const s=E.stages[+el.dataset.si];
+    s.name=el.querySelector('[data-f=name]').value.trim()||'未命名階段';s.from=parseInt(el.querySelector('[data-f=from]').value,10)||0;s.to=parseInt(el.querySelector('[data-f=to]').value,10)||0;if(s.to<s.from)[s.from,s.to]=[s.to,s.from];
+    el.querySelectorAll('.ei').forEach(r=>{const it=s.items[+r.dataset.ii];['t','who','tip'].forEach(g=>it[g]=r.querySelector(`[data-g=${g}]`).value.trim());});});
+  const d=$('edDay');if(d)E.day=d.value.split('\n').map(x=>x.trim()).filter(Boolean);
+  E.notes.forEach((n,k)=>{const h=document.querySelector(`[data-nh="${k}"]`),l=document.querySelector(`[data-nl="${k}"]`);if(h)n.h=h.value.trim();if(l)n.l=l.value.split('\n').map(x=>x.trim()).filter(Boolean);});}
+document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b||!EDIT)return;
+  const re=()=>{collectEdit();renderEdit();};
+  if(b.dataset.additem!=null){collectEdit();EDIT.stages[+b.dataset.additem].items.push({id:uidf(),t:'',who:'承辦',tip:''});renderEdit();const rows=document.querySelectorAll(`.ed[data-si="${b.dataset.additem}"] .ei`);rows[rows.length-1].querySelector('input').focus();return;}
+  if(b.dataset.delitem){collectEdit();const [s,j]=b.dataset.delitem.split('_').map(Number);EDIT.stages[s].items.splice(j,1);renderEdit();return;}
+  if(b.dataset.delstage!=null){collectEdit();const s=EDIT.stages[+b.dataset.delstage];if(!b.dataset.arm){b.dataset.arm=1;b.textContent='再按一次確認刪除「'+s.name+'」';return;}EDIT.stages.splice(+b.dataset.delstage,1);renderEdit();return;}
+  if(b.dataset.delnote!=null){collectEdit();EDIT.notes.splice(+b.dataset.delnote,1);renderEdit();return;}
+  if(b.id==='addStage'){collectEdit();const last=EDIT.stages[EDIT.stages.length-1];EDIT.stages.push({name:'新階段',from:last?last.to+1:0,to:last?last.to+1:0,items:[{id:uidf(),t:'',who:'承辦',tip:''}]});renderEdit();return;}
+  if(b.id==='addNote'){collectEdit();EDIT.notes.push({h:'新分類',l:[]});renderEdit();return;}
+  if(b.id==='edCancel'){EDIT=null;$('day').parentElement.hidden=false;$('notes').parentElement.hidden=false;renderFlow();return;}
+  if(b.id==='edSave'){collectEdit();EDIT.stages.forEach(s=>{s.items=s.items.filter(it=>it.t);s.items.forEach(it=>{if(!it.id)it.id=uidf();});});EDIT.stages.sort((x,y)=>x.from-y.from);
+    // keep existing checkmarks: move index-based keys to the new item ids
+    const old=FLOW,nk={...CHK};old.stages.forEach((s,ix)=>s.items.forEach((it,j)=>{const k='s'+ix+'_'+j;if(!it.id&&CHK[k]){const t=EDIT.stages.flatMap(x=>x.items).find(x=>x.t===it.t);if(t)nk['k'+t.id]=true;}}));
+    const data=JSON.parse(JSON.stringify(EDIT));b.disabled=true;b.textContent='存檔中…';
+    try{await DB.doc('flow/main').set(data);if(JSON.stringify(nk)!==JSON.stringify(CHK))await DB.doc('check/flow').set(nk);FLOW=data;CHK=nk;EDIT=null;$('day').parentElement.hidden=false;$('notes').parentElement.hidden=false;renderFlow();toast('流程表已存檔');}
+    catch(_){b.disabled=false;b.textContent='存檔';toast('存檔失敗，請再試一次');}}
+});
+$('tlEdit').onclick=()=>{if(!FLOW){toast('流程表還在載入');return;}EDIT=JSON.parse(JSON.stringify(FLOW));EDIT.stages.forEach(s=>s.items.forEach(it=>{if(!it.id)it.id=uidf();}));renderEdit();$('tl').scrollIntoView({behavior:'smooth',block:'start'});};
 $('tlNow').onclick=()=>{tlAll=false;$('tlNow').classList.add('on');$('tlAll').classList.remove('on');renderFlow();};
 $('tlAll').onclick=()=>{tlAll=true;$('tlAll').classList.add('on');$('tlNow').classList.remove('on');renderFlow();};
 let DB=null;
