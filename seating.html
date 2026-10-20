@@ -190,13 +190,13 @@ label.inl{display:inline-flex;align-items:center;gap:5px;font-size:16px;color:va
 .door{position:absolute;bottom:1.6%;transform:translateX(-50%);font-size:14px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:1px 10px}
 .door.gate{font-weight:700;color:var(--ink);border-color:var(--gold)}
 .pillar{position:absolute;transform:translate(-50%,-50%);width:10.5%;aspect-ratio:1;border-radius:50%;border:2px dashed var(--line);display:grid;place-items:center;color:var(--muted);font-size:14px}
-.tbl{position:absolute;transform:translate(-50%,-50%);width:11.2%;aspect-ratio:1;border-radius:50%;cursor:pointer;display:grid;place-items:center;text-align:center;
+.tbl{position:absolute;transform:translate(-50%,-50%);width:12.6%;aspect-ratio:1;border-radius:50%;cursor:pointer;display:grid;place-items:center;text-align:center;
   background:conic-gradient(var(--tc) calc(var(--fill)*1turn),color-mix(in srgb,var(--tc) 18%,var(--surface)) 0);padding:5px;border:none}
-.tbl .in{width:100%;height:100%;min-width:0;border-radius:50%;background:var(--surface);display:flex;flex-direction:column;justify-content:center;align-items:center;line-height:1.1;padding:2px 6px;position:relative;overflow:hidden}
+.tbl .in{width:100%;height:100%;min-width:0;border-radius:50%;background:var(--surface);display:flex;flex-direction:column;justify-content:center;align-items:center;line-height:1.1;padding:4px 7px;position:relative;overflow:hidden}
 .tbl{grid-template-columns:100%;grid-template-rows:100%;position:absolute}
 .tbl>.in{grid-area:1/1}
 .tbl .no{font-size:clamp(17px,2.64vw,24px);font-weight:900;font-family:var(--display);color:var(--ink)}
-.tbl .tn{font-size:clamp(11px,1.44vw,13px);font-weight:700;max-width:92%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;color:var(--muted)}
+.tbl .tn{font-size:clamp(10px,1.32vw,13px);font-weight:700;max-width:88%;overflow:hidden;white-space:normal;word-break:break-all;line-height:1.12;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;padding:0 2px;color:var(--ink-2,var(--muted));margin:1px 0}
 .tbl .tc{font-size:clamp(11px,1.44vw,13px);font-variant-numeric:tabular-nums;color:var(--muted)}
 .tbl .tc b{color:var(--ink)}
 .tbl .tv{color:var(--ok)}
@@ -339,7 +339,7 @@ canvas.hidden{display:none}
       <button id="mCheck">✅ 報到</button>
     </div>
     <button id="bAddT">＋ 加開一桌</button>
-    <label class="inl" for="cap">每桌預設<input type="number" id="cap" min="4" max="20" value="11">位</label>
+    <label class="inl" for="cap">每桌預設<input type="number" id="cap" min="4" max="20" value="10">位</label>
     <span class="sep"></span>
     <button class="gold" id="bPrint">列印 A4</button>
     <button id="bJpg">📸 匯出圖片</button>
@@ -440,7 +440,7 @@ const rank=t=>t.main?(t.id==='m1'?0:1):(t.y*1.0+Math.abs(t.x-50)*0.35);
 const byNo=(a,b)=>(a.main?0:1)-(b.main?0:1)||(a.main?rank(a)-rank(b):((parseInt(a.no,10)||999)-(parseInt(b.no,10)||999)));
 
 // ---------- state ----------
-function blank(){return{cap:11,groups:[],people:[],tables:venueTables(),invites:[],sample:false};}
+function blank(){return{cap:10,groups:[],people:[],tables:venueTables(),invites:[],sample:false};}
 function persist(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}schedulePush();syncArrivals();}
 // ---------- shared sync (db): one document per person / group / table, so several editors don't overwrite each other ----------
 let rdb=null,RO=false,pushT=null,arrive=new Map(),booted=false,failed=false;
@@ -720,7 +720,7 @@ function renderPlan(){if(view!=='plan')return;
      const fill=ck?(s.n?s.inn/s.n:0):Math.min(1,s.n/s.cap);
      const fl=[s.veg?`素${s.veg}`:'',s.nb?`牛${s.nb}`:'',s.ch?`👶${s.ch}`:''].filter(Boolean).join(' ');
      return `<button class="tbl${t.main?' mainT':''}${s.n>s.cap?' over':''}${t.off?' off':''}${curT===t.id&&mode!=='swap'?' cur':''}${swapA===t.id?' swapA':''}" data-tid="${t.id}" style="left:${t.x}%;top:${t.y}%;--tc:${ck?'var(--ok)':`var(--c-${s.k})`};--fill:${fill}" aria-label="第${esc(t.no)}桌 ${esc(t.name)} ${s.n}/${s.cap}人">
-     <span class="in"><span class="no">${esc(t.no)}</span><span class="tn">${esc(t.off?'停用':(t.name||(s.n?'（未命名）':'空桌')))}</span>${ck?(s.n?`<span class="arrv">到 ${s.inn}/${s.n}</span>`:''):`<span class="tc"><b>${s.n}</b>/${s.cap}</span>${fl?`<span class="tf">${fl}</span>`:''}`}</span></button>`;}).join('');
+     <span class="in"><span class="no">${esc(t.no)}</span><span class="tn">${esc(t.off?'停用':(t.name||(s.n?'（未命名）':'空桌')))}</span>${ck?(s.n?`<span class="arrv">到 ${s.inn}/${s.n}</span>`:''):`<span class="tc"><b>${s.n}</b>/${s.cap}</span>`}</span></button>`;}).join('');
   pl.classList.toggle('moving',mode==='move');pl.classList.toggle('swapping',mode==='swap');pl.style.touchAction=mode==='move'?'none':'';
   const present=new Set(S.groups.map(g=>g.cat));
   $('legend').innerHTML=mode==='check'?'<span style="--cc:var(--ok)">外圈綠色＝已報到比例</span>':CATS.filter(c=>present.has(c.k)).map(c=>`<span style="--cc:var(--c-${c.k})">${c.label}</span>`).join('');
@@ -1010,7 +1010,7 @@ function printDoc(opts){
      ${S.tables.filter(t=>!t.off).map(t=>{const n=inT(t.id).length;return `<div class="vt${n?'':' empty'}" style="left:${t.x}%;top:${t.y}%"><b>${P(t.no)}</b><span>${P(t.name||'')}</span><i>${n?n+' 人':''}</i></div>`;}).join('')}
      <div class="vdoor" style="left:15.5%">小門</div><div class="vdoor m" style="left:33%">正門</div><div class="vdoor" style="left:48.5%">小門</div></div></section>`);
   }
-  if(opts.cards){for(let i=0;i<tabs.length;i+=6)pages.push(`<section class="page"><h2>各桌名單總表（${i/6+1}／${Math.ceil(tabs.length/6)}）</h2><div class="grid">${tabs.slice(i,i+6).map(card).join('')}</div></section>`);}
+  if(opts.cards){for(let i=0;i<tabs.length;i+=4)pages.push(`<section class="page"><h2>各桌名單總表（${i/4+1}／${Math.ceil(tabs.length/4)}）</h2><div class="grid">${tabs.slice(i,i+4).map(card).join('')}</div></section>`);}
   if(opts.kitchen){const kr=kitchenRows();const sum=k=>kr.reduce((a,r)=>a+r[k],0);
     pages.push(`<section class="page flow"><h1>大中華國際美食館　出菜統計</h1><p class="sub">冠成家電 尾牙晚會・共 ${kr.length} 桌・${sum('n')} 人</p>
       <table class="kt"><thead><tr><th>桌號</th><th>桌名</th><th>人數</th><th>葷</th><th>素</th><th>不吃牛</th><th>兒童椅</th></tr></thead><tbody>
@@ -1048,10 +1048,10 @@ h1{font-size:21pt;margin:0 0 1.5mm}h2{font-size:15pt;margin:0 0 3mm}.sub{margin:
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:4mm;clear:both}
 .tcard{border:1.5px solid #333;border-radius:2mm;padding:2.5mm 3mm;break-inside:avoid}
 .th{display:flex;align-items:baseline;gap:2.5mm;border-bottom:1.5px solid #7A1520;padding-bottom:1mm;margin-bottom:1mm}
-.tno{font-size:24pt;font-weight:900;color:#7A1520;line-height:1}.tnm{font-size:12.5pt;font-weight:700;flex:1}.tct{font-size:8.5pt;color:#444;text-align:right}
-.tcard table{width:100%;border-collapse:collapse;font-size:12.5pt}
-.tcard td{border-bottom:1px dotted #bbb;padding:1mm 1mm;height:6.6mm}
-.tcard .sn{width:6mm;color:#888;text-align:right;font-size:9pt}.tcard .nm{font-weight:700}.tcard .un{color:#555;font-size:8.5pt;text-align:right}
+.tno{font-size:32pt;font-weight:900;color:#7A1520;line-height:1}.tnm{font-size:17pt;font-weight:700;flex:1}.tct{font-size:11pt;color:#444;text-align:right}
+.tcard table{width:100%;border-collapse:collapse;font-size:16pt}
+.tcard td{border-bottom:1px dotted #bbb;padding:1mm 1mm;height:9.2mm}
+.tcard .sn{width:7mm;color:#888;text-align:right;font-size:11pt}.tcard .nm{font-weight:700}.tcard .un{color:#555;font-size:10pt;text-align:right}
 .veg,.nb{display:inline-block;border:1px solid #2F7D4F;color:#2F7D4F;border-radius:1mm;font-size:7.5pt;padding:0 1mm;font-weight:700}.nb{border-color:#B45309;color:#B45309}
 .flow{min-height:0}
 .kt{width:100%;border-collapse:collapse;font-size:12pt}.kt th,.kt td{border:1px solid #999;padding:1.6mm 2.5mm;text-align:center}.kt td:nth-child(2){text-align:left}.kt thead th{background:#F3E7CF}.kt tfoot td{font-weight:900;background:#F7F1E6}
@@ -1074,7 +1074,7 @@ $('bPrint').onclick=()=>{
   openDlg(`<h3>列印 A4</h3>
    <div class="checks">
     <label><input type="checkbox" id="p_map" checked><span><b>會場座位圖</b>（1 頁）<small>照實際位置畫出桌號、桌名和人數，貼在門口和報到台。</small></span></label>
-    <label><input type="checkbox" id="p_cards" checked><span><b>各桌名單總表</b>（每頁 6 桌）<small>每桌桌號、桌名和名單（含單位、素食、不吃牛、兒童椅），帶位人員每人一份。</small></span></label>
+    <label><input type="checkbox" id="p_cards" checked><span><b>各桌名單總表</b>（大字版・每頁 4 桌）<small>每桌桌號、桌名和名單（含單位、素食、不吃牛、兒童椅），帶位人員每人一份。</small></span></label>
     <label><input type="checkbox" id="p_index" checked><span><b>帶位查詢表（建議給帶位人員）</b><small>①依單位：來賓報公司名，一眼看到大字桌號 ②依姓名：依筆畫排，只知道名字也查得到。</small></span></label>
     <label><input type="checkbox" id="p_kitchen" checked><span><b>給大中華的出菜統計</b>（1 頁）<small>每桌人數、葷、素、不吃牛、兒童椅，以及合計桌數。</small></span></label>
     <label><input type="checkbox" id="p_signs"><span><b>桌號牌</b>（每桌 1 頁）<small>大字桌號＋桌名，放在桌上或立牌。</small></span></label>
@@ -1092,17 +1092,26 @@ $('bPrint').onclick=()=>{
 function wrapText(ctx,text,maxW){if(ctx.measureText(text).width<=maxW)return text;let s=text;while(s.length>1&&ctx.measureText(s+'…').width>maxW)s=s.slice(0,-1);return s+'…';}
 async function drawJpg(mode){
   try{await document.fonts.load('700 30px "Noto Sans TC"');await document.fonts.load('900 30px "Noto Serif TC"');}catch(_){}
-  const full=mode==='full',tv=mode==='tv';
-  const W=tv?3840:2400,H=tv?2160:(full?Math.round(W*1.62):Math.round(W*1180/920)+120);
+  const full=mode==='full',tv=mode==='tv',half=mode==='L'||mode==='R';
+  const W=tv?3840:2400,H=tv?2160:half?5300:(full?Math.round(W*1.62):Math.round(W*1180/920)+120);
   const cv=$('cv');cv.width=W;cv.height=H;const c=cv.getContext('2d');
-  // map venue % coordinates to canvas; TV mode turns the room sideways (stage on the left) so it fills a 16:9 screen
-  const top=tv?150:90,bot=tv?40:30,lft=tv?60:0,rgt=tv?60:0;
+  const top=tv?150:half?330:90,bot=tv?40:half?60:30,lft=tv?60:0,rgt=tv?60:0;
   const AW=W-lft-rgt,AH=H-top-bot;
-  const P=(x,y)=>tv?[lft+y/100*AW,top+(100-x)/100*AH]:[lft+x/100*AW,top+y/100*AH];
+  // half mode zooms into one side of the aisle so every name is large
+  const XR=mode==='L'?[1.5,44]:[56,98.5],YR=[17,99];
+  const P=(x,y)=>tv?[lft+y/100*AW,top+(100-x)/100*AH]:half?[(x-XR[0])/(XR[1]-XR[0])*W,top+(y-YR[0])/(YR[1]-YR[0])*AH]:[lft+x/100*AW,top+y/100*AH];
   const rect=(x1,y1,x2,y2)=>{const a=P(x1,y1),b=P(x2,y2);return[Math.min(a[0],b[0]),Math.min(a[1],b[1]),Math.abs(b[0]-a[0]),Math.abs(b[1]-a[1])];};
   const font=(w,s,f='"Noto Sans TC","Microsoft JhengHei",sans-serif')=>{c.font=`${w} ${s}px ${f}`;};
   c.fillStyle='#FAF7F2';c.fillRect(0,0,W,H);
   c.textAlign='center';c.textBaseline='middle';
+  if(half){
+    c.fillStyle='#7A1520';c.beginPath();c.roundRect(40,140,W-80,140,18);c.fill();c.fillStyle='#fff';font(900,84,'"Noto Serif TC",serif');c.fillText('↑ 舞　台',W/2,210);
+    c.textAlign='left';c.fillStyle='#2E2622';font(900,72,'"Noto Serif TC",serif');c.fillText(`冠成家電 尾牙座位表・${mode==='L'?'左半場（面對舞台的左邊）':'右半場（面對舞台的右邊）'}`,40,66);
+    c.textAlign='center';c.fillStyle='#9A8F80';font(700,64,'"Noto Serif TC",serif');
+    const ax=mode==='L'?W-50:50;['走','道'].forEach((ch,i)=>c.fillText(ch,ax,top+AH*0.42+i*80));
+    font(700,52);[['小門',15.5],['正門',33],['小門',48.5]].forEach(([t,x])=>{if(x<XR[0]||x>XR[1])return;const [px]=P(x,97);const py=H-bot/2-10;
+      c.fillStyle=t==='正門'?'#A97A1E':'#fff';c.strokeStyle=t==='正門'?'#A97A1E':'#999';c.lineWidth=4;c.beginPath();c.roundRect(px-110,py-40,220,80,40);c.fill();c.stroke();c.fillStyle=t==='正門'?'#fff':'#333';c.fillText(t,px,py);});
+  }else{
   // stage
   {const [x,y,w,h]=rect(19.5,3.5,83,12.5);c.fillStyle='#7A1520';c.beginPath();c.roundRect(x,y,w,h,16);c.fill();c.fillStyle='#fff';
    if(tv){font(900,120,'"Noto Serif TC",serif');['舞','台'].forEach((ch,i)=>c.fillText(ch,x+w/2,y+h/2+(i?90:-90)));}else{font(900,110,'"Noto Serif TC",serif');c.fillText('舞　台',x+w/2,y+h/2);}}
@@ -1112,38 +1121,40 @@ async function drawJpg(mode){
   // doors
   font(700,tv?56:46);[['小門',15.5],['正門',33],['小門',48.5]].forEach(([t,x])=>{const [px,py]=P(x,97);const bw=tv?200:190,bh=tv?84:70;
     c.fillStyle=t==='正門'?'#A97A1E':'#fff';c.strokeStyle=t==='正門'?'#A97A1E':'#999';c.lineWidth=4;c.beginPath();c.roundRect(px-bw/2,py-bh/2,bw,bh,bh/2);c.fill();c.stroke();c.fillStyle=t==='正門'?'#fff':'#333';c.fillText(t,px,py);});
-  // title
   c.textAlign='left';c.fillStyle='#2E2622';font(900,tv?84:62,'"Noto Serif TC",serif');c.fillText(full?'冠成家電 尾牙座位表':'冠成家電 尾牙座位圖',tv?60:40,tv?78:50);
   c.textAlign='center';
+  }
   const fitLines=(text,maxW,maxLines)=>{const out=[];let cur='';for(const ch of String(text||'')){if(c.measureText(cur+ch).width>maxW){out.push(cur);cur=ch;if(out.length===maxLines)break;}else cur+=ch;}
     if(out.length<maxLines&&cur)out.push(cur);else if(out.length===maxLines&&cur){let l=out[maxLines-1];while(l&&c.measureText(l+'…').width>maxW)l=l.slice(0,-1);out[maxLines-1]=l+'…';}return out;};
-  S.tables.filter(t=>!t.off).forEach(t=>{const ps=inT(t.id);const [cx,cy]=P(t.x,t.y);
-    if(full){const w=320,lh=29,h=ps.length?62+Math.min(ps.length,12)*lh+14:120;const x0=cx-w/2,y0=cy-h/2;
+  S.tables.filter(t=>!t.off&&(!half||(t.x>=XR[0]&&t.x<=XR[1]))).forEach(t=>{const ps=inT(t.id);const [cx,cy]=P(t.x,t.y);
+    if(full||half){const k=half?1.72:1;const w=Math.round(320*k),lh=Math.round(29*k),hh=Math.round(58*k),h=ps.length?hh+Math.min(ps.length,12)*lh+Math.round(18*k):Math.round(120*k);const x0=cx-w/2,y0=cy-h/2;
       c.fillStyle='#fff';c.strokeStyle=ps.length?'#A97A1E':'#D6CEC0';c.lineWidth=4;c.beginPath();c.roundRect(x0,y0,w,h,14);c.fill();c.stroke();
-      c.fillStyle=ps.length?'#7A1520':'#C9BFB0';c.beginPath();c.roundRect(x0,y0,w,58,[14,14,0,0]);c.fill();
-      c.fillStyle='#fff';c.textAlign='left';font(900,42,'"Noto Serif TC",serif');c.fillText(t.no,x0+12,y0+30);
-      const nw=c.measureText(t.no).width;font(700,27);c.fillText(wrapText(c,t.name||'',w-nw-90),x0+22+nw,y0+30);
-      c.textAlign='right';font(500,23);c.fillText(ps.length+'人',x0+w-12,y0+30);
-      c.textAlign='left';font(500,26);c.fillStyle='#222';
-      ps.slice(0,12).forEach((p,i)=>{const mark=(p.veg?'(素)':'')+(p.child?'👶':'');c.fillText(wrapText(c,`${i+1}. ${p.name}${mark}`,w-24),x0+12,y0+78+i*lh);});
-      if(ps.length>12){c.fillStyle='#A3152A';c.fillText(`…另 ${ps.length-12} 位`,x0+12,y0+78+12*lh);}
+      c.fillStyle=ps.length?'#7A1520':'#C9BFB0';c.beginPath();c.roundRect(x0,y0,w,hh,[14,14,0,0]);c.fill();
+      c.fillStyle='#fff';c.textAlign='left';font(900,Math.round(42*k),'"Noto Serif TC",serif');c.fillText(t.no,x0+12,y0+hh/2);
+      const nw=c.measureText(t.no).width;font(700,Math.round(27*k));c.fillText(wrapText(c,t.name||'',w-nw-Math.round(90*k)),x0+22+nw,y0+hh/2);
+      c.textAlign='right';font(500,Math.round(23*k));c.fillText(ps.length+'人',x0+w-12,y0+hh/2);
+      c.textAlign='left';font(500,Math.round(26*k));c.fillStyle='#222';
+      ps.slice(0,12).forEach((p,i)=>{const mark=(p.veg?'(素)':'')+(p.child?'👶':'');c.fillText(wrapText(c,`${i+1}. ${p.name}${mark}`,w-24),x0+12,y0+hh+lh*0.75+i*lh);});
+      if(ps.length>12){c.fillStyle='#A3152A';c.fillText(`…另 ${ps.length-12} 位`,x0+12,y0+hh+lh*0.75+12*lh);}
       c.textAlign='center';
     }else{const r=tv?128:146;c.fillStyle='#fff';c.strokeStyle=ps.length?'#A97A1E':'#D6CEC0';c.lineWidth=tv?7:8;c.beginPath();c.arc(cx,cy,r,0,Math.PI*2);c.fill();c.stroke();
       const has=!!(t.name||'').trim();
       c.fillStyle=ps.length?'#7A1520':'#B0A898';font(900,has?(tv?84:100):(tv?100:116),'"Noto Serif TC",serif');c.fillText(t.no,cx,has?cy-(tv?36:44):cy);
-      if(has){c.fillStyle='#2E2622';font(700,tv?42:42);const ls=fitLines(t.name,2*r-(tv?44:52),2);ls.forEach((l,i)=>c.fillText(l,cx,cy+(tv?28:36)+i*(tv?40:48)-(ls.length-1)*(tv?14:18)));}}
+      if(has){c.fillStyle='#2E2622';font(700,42);const ls=fitLines(t.name,2*r-(tv?44:52),2);ls.forEach((l,i)=>c.fillText(l,cx,cy+(tv?28:36)+i*(tv?40:48)-(ls.length-1)*(tv?14:18)));}}
   });
   return await new Promise(res=>cv.toBlob(res,'image/jpeg',.92));
 }
 $('bJpg').onclick=()=>{openDlg(`<h3>📸 匯出圖片（JPG）</h3><div class="checks">
   <label><input type="radio" name="jpgm" id="j_tv" checked><span><b>電視螢幕用（橫式）</b><small>放在餐廳走道螢幕上：只顯示桌號和桌名，圓圈和字都放大；舞台在左邊，整張填滿 16:9 螢幕。</small></span></label>
   <label><input type="radio" name="jpgm" id="j_name"><span><b>桌名座位圖（直式）</b><small>大字桌號＋桌名，傳到 LINE 給招待人員看動線。</small></span></label>
-  <label><input type="radio" name="jpgm" id="j_full"><span><b>完整座位表（含名單）</b><small>每桌名單都寫出來，內部討論排位用。</small></span></label></div>
+  <label><input type="radio" name="jpgm" id="j_half"><span><b>完整名單・左右半場各一張（大字）</b><small>以走道分成左、右兩張，名字放大，手機上不用一直放大也看得清楚。會下載 2 張圖。</small></span></label>
+  <label><input type="radio" name="jpgm" id="j_full"><span><b>完整座位表（整場一張）</b><small>一張看全場，名字較小，適合內部討論排位。</small></span></label></div>
   <div class="acts"><button id="dCancel">取消</button><button class="primary" id="dOk">下載 JPG</button></div>`);
   $('dCancel').onclick=closeDlg;
-  $('dOk').onclick=async()=>{const mode=$('j_tv').checked?'tv':$('j_full').checked?'full':'name';const blob=await drawJpg(mode);closeDlg();if(!blob){toast('圖片產生失敗');return;}
+  $('dOk').onclick=async()=>{const mode=$('j_tv').checked?'tv':$('j_full').checked?'full':$('j_half').checked?'half':'name';closeDlg();
+    if(mode==='half'){for(const m of ['L','R']){const blob=await drawJpg(m);if(blob)await offer(m==='L'?'冠成尾牙_座位表_左半場.jpg':'冠成尾牙_座位表_右半場.jpg',blob,null);}return;}
+    const blob=await drawJpg(mode);if(!blob){toast('圖片產生失敗');return;}
     offer({tv:'冠成尾牙_螢幕座位圖.jpg',name:'冠成尾牙_桌名圖.jpg',full:'冠成尾牙_座位表.jpg'}[mode],blob,null);};};
-
 // ---------- 📋 Excel (ExcelJS) ----------
 async function buildXlsx(){
   const wb=new ExcelJS.Workbook();wb.creator='冠成尾牙座位系統';
@@ -1224,12 +1235,14 @@ function loadSample(){
   const seat=(unit,tid,n)=>{const g=S.groups.find(g=>g.unit===unit);S.people.filter(p=>p.gid===g.id&&!p.t).slice(0,n).forEach(p=>p.t=tid);};
   seat('董事長貴賓（範例）','m1',10);seat('總經理貴賓（範例）','m2',9);
   seat('範例電器 A（原廠）','t1',11);seat('範例電器 B（原廠）','t2',11);seat('示範鎮公所','t3',2);seat('示範農會','t3',3);seat('示範扶輪社','t3',6);
+  ['t1','t2','t3'].forEach(id=>T(id).cap=11);
   [['t1','範例電器A'],['t2','範例電器B'],['t3','貴賓社團併桌'],['t4','範例電器C'],['t5','員工'],['t6','員工2']].forEach(([id,n])=>{T(id).name=n;T(id).named=true;});
 }
 
 // ---------- boot ----------
 (async()=>{try{if(window.claude&&claude.use)dl=await claude.use('downloads');}catch(_){dl=null;}})();
 S=restore();
+if(S&&S.sample&&S.cap===11){S.cap=10;S.tables.forEach(t=>{if(!t.cap&&inT(t.id).length>10)t.cap=11;});}
 if(!S){loadSample();try{localStorage.setItem(KEY,JSON.stringify(S));}catch(_){}}
 safeRender();
 startSync();
