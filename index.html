@@ -569,5 +569,10 @@ f.addEventListener('submit', async e => {
 });
 $('thxOk').addEventListener('click', () => { $('thanks').hidden = true; });
 </script>
+<script>(()=>{const b=document.createElement('button');b.type='button';b.setAttribute('aria-label','回到最上面');
+b.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+b.style.cssText='position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:55;width:56px;height:56px;border-radius:50%;border:1px solid rgba(226,200,143,.6);background:#7A1520;color:#F1E3C2;display:grid;place-items:center;cursor:pointer;box-shadow:0 8px 24px rgba(78,11,19,.35);opacity:0;pointer-events:none;transition:opacity .2s';
+b.onclick=()=>window.scrollTo({top:0,behavior:'smooth'});document.body.appendChild(b);
+const u=()=>{const on=scrollY>700;b.style.opacity=on?'1':'0';b.style.pointerEvents=on?'auto':'none';};addEventListener('scroll',u,{passive:true});u();})();</script>
 </body>
 </html>

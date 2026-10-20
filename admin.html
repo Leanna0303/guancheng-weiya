@@ -89,7 +89,7 @@ window.addEventListener('beforeunload',e=>{if(pend.size||inflight.size){e.preven
 
 // ---------- connection badge ----------
 let badge=null;
-function setStatus(s){if(!badge){badge=document.createElement('div');badge.style.cssText='position:fixed;right:max(12px,env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:60;background:#B5541B;color:#fff;border-radius:999px;padding:6px 14px;font:600 14px "Noto Sans TC",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25)';badge.hidden=true;document.body.appendChild(badge);}
+function setStatus(s){if(!badge){badge=document.createElement('div');badge.style.cssText='position:fixed;left:max(12px,env(safe-area-inset-left,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:60;background:#B5541B;color:#fff;border-radius:999px;padding:6px 14px;font:600 14px "Noto Sans TC",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25)';badge.hidden=true;document.body.appendChild(badge);}
   badge.hidden=!s;badge.textContent='⚠️ 網路中斷，恢復後會自動同步';}
 
 // ---------- downloads ----------
@@ -98,6 +98,16 @@ const downloads={save:async({filename,data})=>{
   const blob=data instanceof Blob?data:new Blob([data],{type});const url=URL.createObjectURL(blob);
   if(/\.html?$/i.test(filename)){const w=window.open(url,'_blank');if(w){setTimeout(()=>URL.revokeObjectURL(url),60000);return;}}
   const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}};
+
+// ---------- back to top ----------
+function topBtn(){const b=document.createElement('button');b.type='button';b.setAttribute('aria-label','回到最上面');b.title='回到最上面';
+  b.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg><span style="font-size:12px;font-weight:700;line-height:1">頂部</span>';
+  b.style.cssText='position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:55;width:60px;height:60px;border-radius:50%;border:none;background:#7A1520;color:#F6E7C8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;box-shadow:0 8px 24px rgba(78,11,19,.35);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;transform:translateY(8px);font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif';
+  b.onclick=()=>window.scrollTo({top:0,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth'});
+  document.body.appendChild(b);
+  const upd=()=>{const on=window.scrollY>500;b.style.opacity=on?'1':'0';b.style.pointerEvents=on?'auto':'none';b.style.transform=on?'none':'translateY(8px)';};
+  window.addEventListener('scroll',upd,{passive:true});upd();}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',topBtn);else topBtn();
 
 window.claude={use:async n=>{if(n==='db'){await ready;return db;}if(n==='downloads')return downloads;return null;}};
 })();
