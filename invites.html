@@ -116,6 +116,7 @@ window.claude={use:async n=>{if(n==='db'){await ready;return db;}if(n==='downloa
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Noto+Serif+TC:wght@500;700;900&family=Noto+Sans+TC:wght@400;500;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 /* Layout: a lacquer-red register cover (title + headcount + overall progress), then the four-step pipeline as the filter, then a ledger grouped by category. Same lacquer & gold as the invitation site. */
 :root{
@@ -731,12 +732,62 @@ $('bExport').onclick=()=>{const att=[...INV.values()].filter(i=>!i.merge&&i.repl
   const rows=att.map(i=>({'時間戳記':'','公司／單位名稱':i.unit,'單位類別':catFor(i),'貴姓大名':i.contact,'代表人職稱':'','是否出席':'會出席','總參加人數':i.count||'','參加人員完整名單':S_(i.names),'素食人數':i.veg||0,'是否願意贊助尾牙摸彩獎品':i.webGift?'是':'','贊助獎品（一）':i.webGift||'','其他需求':i.note||'','代表品牌':i.brand||''}));
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'出席名單');
   offer('冠成尾牙_出席名單.xlsx',new Uint8Array(XLSX.write(wb,{bookType:'xlsx',type:'array'})));};
-$('bXlsx').onclick=()=>{const L={boss:'待老闆確認',skip:'不邀請',send:'待發送',wait:'等回覆',replied:'已回覆'};
-  const rows=[...INV.values()].sort((a,b)=>(GROUPS.indexOf(a.group)+99)%99-(GROUPS.indexOf(b.group)+99)%99||a.id.localeCompare(b.id)).map(i=>({'分類':i.group,'單位':i.unit,'邀請對象':i.contact,'邀請方式':i.channel,'地址／電話':[i.addr,i.fax].filter(Boolean).join(' '),'老闆確認':i.boss==='yes'?'邀請':i.boss==='no'?'不邀':'待確認','進度':L[stage(i)],'發送日':i.sentAt||'','催回覆':(i.reminders||[]).join('、'),'回覆':i.merge?'併入 '+i.merge:i.reply==='yes'?'出席':i.reply==='no'?'不克出席':'','人數':i.reply==='yes'?i.count:'','名單':i.names||'','素食':i.veg||'','不吃牛':(S_(i.names).match(/不吃牛/g)||[]).length||'','兒童椅':(S_(i.names).match(/兒童椅/g)||[]).length||'','備註':i.note||'','去年紀錄':lyText(i)}));
-  const ws=XLSX.utils.json_to_sheet(rows);ws['!cols']=[8,22,26,8,30,9,10,10,14,9,6,40,6,7,7,24,36].map(w=>({wch:w}));
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'邀請追蹤');
-  offer('冠成尾牙_邀請追蹤表.xlsx',new Uint8Array(XLSX.write(wb,{bookType:'xlsx',type:'array'})));};
-
+$('bXlsx').onclick=async()=>{
+  if(typeof ExcelJS==='undefined'){toast('Excel 元件載入失敗，請重新整理');return;}
+  const L={boss:'待老闆確認',skip:'不邀請',send:'待發送',wait:'等回覆',replied:'已回覆'};
+  const FILL={boss:'FFF4E7CB',send:'FFEFEAE2',wait:'FFF8E3D3',replied:'FFE3EFE6',skip:'FFF2F0EC'};
+  const FONT={boss:'FF8A6420',send:'FF5C514A',wait:'FFB5541B',replied:'FF2F6F4A',skip:'FF9E9084'};
+  const red='FF7A1520',gold='FFD9BF8A',pale='FFF9F4EA',hair={style:'thin',color:{argb:'FFE6DACA'}};
+  const all=[...INV.values()].sort((a,b)=>(GROUPS.indexOf(a.group)+99)%99-(GROUPS.indexOf(b.group)+99)%99||a.id.localeCompare(b.id));
+  const wb=new ExcelJS.Workbook();wb.creator='冠成尾牙';
+  const evt=CFG.date||'';const stamp=new Date().toLocaleString('zh-TW',{year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  const title=(ws,text,span)=>{ws.mergeCells(1,1,1,span);const c=ws.getCell(1,1);c.value=text;c.font={name:'微軟正黑體',size:16,bold:true,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:red}};c.alignment={vertical:'middle',indent:1};ws.getRow(1).height=34;
+    ws.mergeCells(2,1,2,span);const d=ws.getCell(2,1);d.value=`尾牙日期：${evt||'未設定'}　　匯出時間：${stamp}　　※ 公司資料，請勿外流`;d.font={name:'微軟正黑體',size:10,color:{argb:'FF8C7F74'}};d.alignment={indent:1};ws.getRow(2).height=20;};
+  const head=(ws,r,cols)=>{const row=ws.getRow(r);cols.forEach((h,i)=>{const c=row.getCell(i+1);c.value=h;c.font={name:'微軟正黑體',bold:true,size:11,color:{argb:'FF4E0B13'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF4E7CB'}};c.border={bottom:{style:'medium',color:{argb:gold}}};c.alignment={vertical:'middle',horizontal:'center',wrapText:true};});row.height=26;};
+  // ---------- 1. 總覽 ----------
+  const ov=wb.addWorksheet('總覽',{views:[{showGridLines:false}],pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0}});
+  ov.columns=[{width:16},{width:11},{width:11},{width:11},{width:11},{width:11},{width:11},{width:12},{width:12}];
+  title(ov,'冠成家電尾牙　邀請追蹤總覽',9);
+  head(ov,4,['分類','邀請筆數','待老闆確認','待發送','等回覆','已回覆','不邀請','確定出席人數','去年人數']);
+  let r=5;const tot={n:0,boss:0,send:0,wait:0,replied:0,skip:0,ppl:0,ly:0};
+  [...new Set(all.map(i=>i.group))].forEach(g=>{const its=all.filter(i=>i.group===g);const c=k=>its.filter(i=>stage(i)===k).length;
+    const ppl=its.filter(i=>!i.merge&&i.reply==='yes').reduce((a,i)=>a+people(i),0),ly=its.reduce((a,i)=>a+(Number(i.lyCount)||0),0);
+    const v=[g,its.length,c('boss'),c('send'),c('wait'),c('replied'),c('skip'),ppl,ly];ov.getRow(r).values=v;
+    ['n','boss','send','wait','replied','skip','ppl','ly'].forEach((k,ix)=>tot[k]+=v[ix+1]);
+    ov.getRow(r).eachCell((cell,ci)=>{cell.font={name:'微軟正黑體',size:11,bold:ci===1};cell.alignment={horizontal:ci===1?'left':'center',vertical:'middle',indent:ci===1?1:0};cell.border={bottom:hair};
+      const key=[null,null,null,'boss','send','wait','replied','skip'][ci];if(key&&cell.value)cell.font={name:'微軟正黑體',size:11,bold:true,color:{argb:FONT[key]}};});
+    ov.getRow(r).height=22;r++;});
+  const tr=ov.getRow(r);tr.values=['合計',tot.n,tot.boss,tot.send,tot.wait,tot.replied,tot.skip,tot.ppl,tot.ly];
+  tr.eachCell((cell,ci)=>{cell.font={name:'微軟正黑體',size:12,bold:true,color:{argb:red}};cell.alignment={horizontal:ci===1?'left':'center',indent:ci===1?1:0};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:pale}};cell.border={top:{style:'medium',color:{argb:gold}}};});tr.height=26;
+  // ---------- 2. 邀請名冊（依分類分段） ----------
+  const cols=[['單位',22],['邀請對象',24],['品牌',9],['方式',7],['進度',11],['發送日',12],['今年回覆',10],['人數',6],['今年名單',34],['去年人數',8],['去年贊助',30],['備註',30],['電話／地址',24]];
+  const ws=wb.addWorksheet('邀請名冊',{views:[{state:'frozen',ySplit:4,showGridLines:false}],pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,margins:{left:.3,right:.3,top:.4,bottom:.5,header:.2,footer:.2}},headerFooter:{oddFooter:'&C第 &P 頁，共 &N 頁'}});
+  ws.columns=cols.map(([,w])=>({width:w}));
+  title(ws,'冠成家電尾牙　邀請名冊',cols.length);head(ws,4,cols.map(c=>c[0]));
+  ws.pageSetup.printTitlesRow='4:4';
+  r=5;
+  [...new Set(all.map(i=>i.group))].forEach(g=>{const its=all.filter(i=>i.group===g);
+    ws.mergeCells(r,1,r,cols.length);const gc=ws.getCell(r,1);gc.value=`${g}　${its.length} 筆`;gc.font={name:'微軟正黑體',size:12,bold:true,color:{argb:red}};gc.fill={type:'pattern',pattern:'solid',fgColor:{argb:pale}};gc.border={bottom:{style:'thin',color:{argb:gold}}};gc.alignment={vertical:'middle',indent:1};ws.getRow(r).height=24;r++;
+    its.forEach(i=>{const st=stage(i);const rep=i.merge?`併入 ${i.merge}`:i.reply==='yes'?'出席':i.reply==='no'?'不克出席':'';
+      const row=ws.getRow(r);row.values=[i.unit,i.contact,i.brand||'',i.channel||'',L[st],i.sentAt||'',rep,i.reply==='yes'?Number(i.count)||'':'',S_(i.names),i.lyCount??'',S_(i.lyGift),[i.note,i.lyNote].filter(Boolean).join('；'),[i.fax,i.addr].filter(Boolean).join('　')];
+      row.eachCell({includeEmpty:true},(cell,ci)=>{cell.font={name:'微軟正黑體',size:11,bold:ci===1};cell.alignment={vertical:'top',wrapText:true,horizontal:[4,5,6,7,8,10].includes(ci)?'center':'left'};cell.border={bottom:hair};});
+      const sc=row.getCell(5);sc.fill={type:'pattern',pattern:'solid',fgColor:{argb:FILL[st]}};sc.font={name:'微軟正黑體',size:11,bold:true,color:{argb:FONT[st]}};
+      if(i.reply==='yes'){row.getCell(7).font={name:'微軟正黑體',size:11,bold:true,color:{argb:FONT.replied}};}
+      row.getCell(13).numFmt='@';
+      r++;});
+  });
+  ws.autoFilter={from:{row:4,column:1},to:{row:4,column:cols.length}};
+  // ---------- 3. 待辦：等回覆／待發送 ----------
+  const todo=all.filter(i=>['wait','send'].includes(stage(i)));
+  const tw=wb.addWorksheet('待追蹤',{views:[{state:'frozen',ySplit:4,showGridLines:false}],pageSetup:{paperSize:9,orientation:'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0}});
+  const tc=[['進度',11],['單位',24],['邀請對象',24],['方式',7],['發送日',11],['已過天數',9],['催過',7],['電話',16],['☐ 已聯絡',10]];
+  tw.columns=tc.map(([,w])=>({width:w}));title(tw,`待追蹤名單（等回覆 ${todo.filter(i=>stage(i)==='wait').length}・待發送 ${todo.filter(i=>stage(i)==='send').length}）`,tc.length);head(tw,4,tc.map(c=>c[0]));
+  r=5;todo.sort((a,b)=>(stage(a)==='wait'?0:1)-(stage(b)==='wait'?0:1)||(a.sentAt||'').localeCompare(b.sentAt||'')).forEach(i=>{const st=stage(i);const row=tw.getRow(r);
+    row.values=[L[st],i.unit,i.contact,i.channel||'',i.sentAt||'',i.sentAt?days(i.sentAt):'',(i.reminders||[]).length||'',i.fax||'','☐'];
+    row.eachCell({includeEmpty:true},(cell,ci)=>{cell.font={name:'微軟正黑體',size:11,bold:ci===2};cell.alignment={vertical:'middle',wrapText:true,horizontal:[1,4,5,6,7,9].includes(ci)?'center':'left'};cell.border={bottom:hair};});
+    const sc=row.getCell(1);sc.fill={type:'pattern',pattern:'solid',fgColor:{argb:FILL[st]}};sc.font={name:'微軟正黑體',size:11,bold:true,color:{argb:FONT[st]}};row.height=22;r++;});
+  const buf=await wb.xlsx.writeBuffer();
+  offer('冠成尾牙_邀請追蹤表.xlsx',new Uint8Array(buf));};
 // ---------- events ----------
 document.addEventListener('click',async e=>{const t=e.target.closest('button');if(!t)return;
   if(t.dataset.filt){filt=(t.dataset.filt===filt)?'all':t.dataset.filt;render();return;}
