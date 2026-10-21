@@ -502,31 +502,31 @@ function registerHTML(list,o){
 @media print{.bar{display:none}}
 @media screen{body{background:#e9e4dc}main{background:#fff;max-width:${o.orient==='landscape'?'297mm':'210mm'};margin:14px auto;padding:10mm;box-shadow:0 1px 6px rgba(0,0,0,.2)}}
 .cover{display:flex;justify-content:space-between;align-items:flex-end;gap:10mm;border-bottom:2.5pt double #A8843F;padding-bottom:3mm;margin-bottom:4mm}
-.cover small{display:block;font-size:9pt;letter-spacing:.2em;color:#A8843F}
-.cover h1{margin:1mm 0 0;font-size:20pt;letter-spacing:.12em;color:#7A1520}
-.cover .r{text-align:right;font-size:9.5pt;color:#5C514A;line-height:1.6}
-.sumrow{display:flex;gap:6mm;flex-wrap:wrap;font-size:9.5pt;color:#5C514A;margin:0 0 4mm}
-.sumrow b{color:#1d1714;font-size:11pt}
-h2{font-size:12.5pt;margin:5mm 0 1.5mm;color:#7A1520;letter-spacing:.08em;display:flex;align-items:baseline;gap:3mm}
-h2 span{font-size:9pt;color:#8C7F74;letter-spacing:0;font-weight:500}
-table{width:100%;border-collapse:collapse;font-size:9.6pt;table-layout:fixed}
+.cover small{display:block;font-size:12pt;letter-spacing:.3em;color:#A8843F}
+.cover h1{margin:1mm 0 0;font-size:26pt;letter-spacing:.12em;color:#7A1520}
+.cover .r{text-align:right;font-size:12pt;color:#5C514A;line-height:1.6}
+.sumrow{display:flex;gap:4mm 7mm;flex-wrap:wrap;font-size:12pt;color:#5C514A;margin:0 0 4mm}
+.sumrow b{color:#1d1714;font-size:14pt}
+h2{font-size:17pt;margin:6mm 0 2mm;color:#7A1520;letter-spacing:.08em;display:flex;align-items:baseline;gap:3mm}
+h2 span{font-size:12pt;color:#8C7F74;letter-spacing:0;font-weight:500}
+table{width:100%;border-collapse:collapse;font-size:12.5pt;table-layout:fixed}
 thead{display:table-header-group}
-th{background:#F4E7CB;color:#4E0B13;font-size:8.6pt;font-weight:700;text-align:left;padding:1.4mm 1.6mm;border:0.5pt solid #D9BF8A}
-td{border:0.5pt solid #DCCFBE;padding:1.3mm 1.6mm;vertical-align:top;line-height:1.4;overflow-wrap:anywhere}
+th{background:#F4E7CB;color:#4E0B13;font-size:11.5pt;font-weight:700;text-align:left;padding:1.4mm 1.6mm;border:0.5pt solid #D9BF8A}
+td{border:0.5pt solid #DCCFBE;padding:2mm 2mm;vertical-align:top;line-height:1.45;overflow-wrap:anywhere}
 tr{break-inside:avoid}
 tbody tr:nth-child(even) td{background:#FCF8F1}
-.no{width:9mm;text-align:center;color:#8C7F74;white-space:nowrap;word-break:normal}
-.u{width:${o.orient==='landscape'?'50mm':'42mm'}}.u b{font-size:10.4pt}.u div{color:#5C514A;font-size:8.8pt}
-.c{width:11mm;text-align:center}.c b{font-size:11pt}
-.nm{font-size:8.6pt;color:#3a302a}.gf{width:${o.orient==='landscape'?'42mm':'30mm'};font-size:8.6pt}.nt{width:${o.orient==='landscape'?'36mm':'26mm'};font-size:8.6pt;color:#5C514A}
-.bx{width:11mm;text-align:center;font-size:13pt;word-break:keep-all}th.bx{font-size:8.6pt}.memo{width:${o.orient==='landscape'?'34mm':'22mm'}}
-.sm{font-size:8pt;color:#8C7F74}
-.foot{margin-top:6mm;font-size:9pt;color:#5C514A;display:flex;justify-content:space-between;gap:8mm}
+.no{width:10mm;font-size:11pt;text-align:center;color:#8C7F74;white-space:nowrap;word-break:normal}
+.u{width:${o.orient==='landscape'?'50mm':'42mm'}}.u b{font-size:14.5pt}.u div{color:#5C514A;font-size:12pt}
+.c{width:14mm;text-align:center}.c b{font-size:16pt}
+.nm{font-size:11.5pt;color:#3a302a}.gf{width:${o.orient==='landscape'?'44mm':'32mm'};font-size:11.5pt}.nt{width:${o.orient==='landscape'?'36mm':'26mm'};font-size:11.5pt;color:#5C514A}
+.bx{width:13mm;text-align:center;font-size:18pt;word-break:keep-all}th.bx{font-size:11.5pt}.memo{width:${o.orient==='landscape'?'34mm':'22mm'}}
+.sm{font-size:11pt;color:#8C7F74}
+.foot{margin-top:6mm;font-size:12pt;color:#5C514A;display:flex;justify-content:space-between;gap:8mm}
 .sign{border-bottom:0.6pt solid #5C514A;min-width:50mm;display:inline-block;height:6mm}
 </style></head><body>
 <div class="bar"><span>邀請名冊（${list.length} 筆）</span><button onclick="print()">列印</button><span style="opacity:.85;font-size:12.5px">紙張選 A4・${o.orient==='landscape'?'橫向':'直向'}，並勾選「背景圖形」</span></div>
 <main>
-<div class="cover"><div><small>THE 37TH ANNIVERSARY · GUEST REGISTER</small><h1>冠成家電尾牙　邀請名冊</h1></div>
+<div class="cover"><div><small>三十七週年慶・邀請名冊</small><h1>冠成家電尾牙　邀請名冊</h1></div>
 <div class="r">${o.scope==='all'?'全部名單':'待老闆確認'}・共 ${list.length} 筆<br>列印日期：${date}</div></div>
 <div class="sumrow"><span>去年出席合計 <b>${lyTotal}</b> 位（以名單上有記錄的為準）</span>${order.map(g=>`<span>${esc(g)} <b>${byG.get(g).length}</b></span>`).join('')}</div>
 ${order.map(g=>`<h2>${esc(g)}<span>${byG.get(g).length} 筆</span></h2><table><thead>${head}</thead><tbody>${rows(byG.get(g))}</tbody></table>`).join('')}
