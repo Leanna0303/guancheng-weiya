@@ -485,6 +485,7 @@ function printDlg(){
 }
 function registerHTML(list,o){
   const D=o.size!=='big';
+  const MC=!o.names&&!o.gift&&!o.note;const NC=o.orient==='landscape'?3:2;
   const byG=new Map();list.sort((a,b)=>a.id.localeCompare(b.id)).forEach(i=>{if(!byG.has(i.group))byG.set(i.group,[]);byG.get(i.group).push(i);});
   const order=[...byG.keys()].sort((a,b)=>(GROUPS.indexOf(a)+99)%99-(GROUPS.indexOf(b)+99)%99);
   const lyTotal=list.reduce((a,i)=>a+(Number(i.lyCount)||0),0);
@@ -527,13 +528,14 @@ tbody tr:nth-child(even) td{background:#FCF8F1}
 .sm{font-size:${D?'9.5pt':'11pt'};color:#8C7F74}
 .foot{margin-top:6mm;font-size:12pt;color:#5C514A;display:flex;justify-content:space-between;gap:8mm}
 .sign{border-bottom:0.6pt solid #5C514A;min-width:50mm;display:inline-block;height:6mm}
+${MC?`.mc{columns:${NC};column-gap:5mm}.mc .u{width:auto}.mc table{break-inside:auto}`:''}
 </style></head><body>
 <div class="bar"><span>邀請名冊（${list.length} 筆）</span><button onclick="print()">列印</button><span style="opacity:.85;font-size:12.5px">紙張選 A4・${o.orient==='landscape'?'橫向':'直向'}，並勾選「背景圖形」</span></div>
 <main>
 <div class="cover"><div><small>三十七週年慶・邀請名冊</small><h1>冠成家電尾牙　邀請名冊</h1></div>
 <div class="r">${o.scope==='all'?'全部名單':'待老闆確認'}・共 ${list.length} 筆<br>列印日期：${date}</div></div>
 <div class="sumrow"><span>去年出席合計 <b>${lyTotal}</b> 位（以名單上有記錄的為準）</span>${order.map(g=>`<span>${esc(g)} <b>${byG.get(g).length}</b></span>`).join('')}</div>
-${order.map(g=>`<h2>${esc(g)}<span>${byG.get(g).length} 筆</span></h2><table><thead>${head}</thead><tbody>${rows(byG.get(g))}</tbody></table>`).join('')}
+${order.map(g=>`<h2>${esc(g)}<span>${byG.get(g).length} 筆</span></h2>${MC?'<div class="mc">':''}<table><thead>${head}</thead><tbody>${rows(byG.get(g))}</tbody></table>${MC?'</div>':''}`).join('')}
 ${o.box?'<div class="foot"><span>勾選完成後請交回，負責同仁會更新到系統。</span><span>確認人：<span class="sign"></span></span></div>':''}
 </main></body></html>`;
 }
