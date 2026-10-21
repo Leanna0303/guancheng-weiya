@@ -429,7 +429,7 @@ function parts(i){const st=stage(i);const w=canWrite;
   if(st==='boss'){state='<span class="stamp p-boss">待老闆確認</span>';acts=w?`<button class="ok" data-boss="${i.id}" data-v="yes">✓ 邀請</button><button class="no" data-boss="${i.id}" data-v="no">不邀</button><button class="ghost" data-reply="${i.id}" title="已經口頭或 LINE 回覆了">已回覆？</button>`:'';}
   else if(st==='skip'){state=`<span class="stamp p-skip">不邀請</span>${i.bossNote?esc(i.bossNote):''}`;acts=w?`<button class="ghost" data-boss="${i.id}" data-v="pending">改回待確認</button>`:'';}
   else if(st==='send'){state=`<span class="stamp p-send">待發送</span><span class="meta">${esc(i.channel||'')}</span>`;
-    acts=w?`<button data-msg="${i.id}" data-k="invite">寫邀請訊息</button><button class="ok" data-sent="${i.id}">✓ 已發送</button><button class="ghost" data-reply="${i.id}" title="已經口頭或 LINE 回覆了">已回覆？</button>`:'';}
+    acts=w?`<button data-msg="${i.id}" data-k="invite">寫邀請訊息</button><button class="ok" data-sent="${i.id}">✓ 已發送</button><button class="ghost" data-reply="${i.id}" title="已經口頭或 LINE 回覆了">已回覆？</button><button class="ghost" data-boss="${i.id}" data-v="pending" title="退回「老闆確認」">改回待確認</button>`:'';}
   else if(st==='wait'){const d=days(i.sentAt);const r=(i.reminders||[]).length;
     state=`<span class="stamp p-wait">等回覆</span><span class="meta">${i.sentAt?`${i.sentAt.slice(5).replace('-','/')} 發送・${d} 天`:''}${r?`・催過 ${r} 次`:''}</span>`;
     acts=w?`<button data-msg="${i.id}" data-k="remind">寫提醒訊息</button><button class="primary" data-reply="${i.id}">登記回覆</button>`:'';}
@@ -560,7 +560,7 @@ function editDlg(i){const isNew=!i;i=i?clone(i):{id:'m'+Date.now().toString(36),
    <div class="f"><label for="e_ly">去年紀錄</label><input id="e_ly" value="${esc(lyText(i))}" placeholder="例：去年 3 人・贊助 微波爐"></div>
    <div class="f"><label for="e_brand">代表品牌</label><input id="e_brand" value="${esc(i.brand||'')}" placeholder="例：國際牌、日立（同品牌會排在一起）" list="brandList"><datalist id="brandList">${['日立','國際牌','東元','聲寶','大金','禾聯','LG','三洋','大同','冰點','奇美','歌林','萬士益','惠而浦','元山'].map(b=>`<option value="${b}">`).join('')}</datalist></div>
    <div class="f"><label for="e_merge">回覆併入</label><input id="e_merge" value="${esc(i.merge)}" placeholder="只寄卡給高層、由業務統一回覆時，填該單位名稱"></div>
-   ${!isNew?`<div class="f"><label>進度</label><div class="radios"><label><input type="checkbox" id="e_sent" ${i.sent?'checked':''}>已發送</label><span class="muted">老闆：${i.boss==='yes'?'邀請':i.boss==='no'?'不邀':'待確認'}</span></div></div>`:''}
+   ${!isNew?`<div class="f"><label>進度</label><div class="radios"><label><input type="checkbox" id="e_sent" ${i.sent?'checked':''}>已發送</label><label>老闆確認 <select id="e_boss" style="width:auto"><option value="pending" ${i.boss!=='yes'&&i.boss!=='no'?'selected':''}>待確認</option><option value="yes" ${i.boss==='yes'?'selected':''}>邀請</option><option value="no" ${i.boss==='no'?'selected':''}>不邀</option></select></label></div></div>`:''}
    <div class="acts" style="display:flex;gap:8px;flex-wrap:wrap">${!isNew?'<button class="ghost" id="dDel" style="margin-right:auto;color:var(--warn)">刪除這筆</button>':''}<button id="dCancel">取消</button><button class="primary" id="dOk">儲存</button></div>`);
   $('dCancel').onclick=closeDlg;
   if($('dDel'))$('dDel').onclick=async()=>{if(!confirmBox())return;const orig=clone(INV.get(i.id)||i);INV.delete(i.id);render();closeDlg();
@@ -572,6 +572,7 @@ function editDlg(i){const isNew=!i;i=i?clone(i):{id:'m'+Date.now().toString(36),
     const ad=S_($('e_addr').value);if(ad!==[i.addr,i.fax].filter(Boolean).join('　')){i.addr=ad;i.fax='';}
     if(lyChanged){i.lyNote=S_($('e_ly').value);i.lyCount=null;i.lyGift='';}
     if($('e_sent')){const s=$('e_sent').checked;if(s&&!i.sent)i.sentAt=today();i.sent=s;}
+    if($('e_boss'))i.boss=$('e_boss').value;
     closeDlg();await save(i);toast('已儲存');};
 }
 function undoToast(msg,fn){const d=document.createElement('div');d.className='toast';d.style.display='flex';d.style.gap='12px';d.style.alignItems='center';
