@@ -297,7 +297,7 @@ table.lg{width:100%;border-collapse:collapse;font-size:15.9px;min-width:980px}
 .f input,.f select{width:100%}
 @media (max-width:520px){.f{grid-template-columns:minmax(0,1fr)}}
 .radios{display:flex;gap:14px;flex-wrap:wrap}
-.radios label{display:inline-flex;gap:6px;align-items:center;font-size:17.1px}
+.radios label{display:inline-flex;gap:6px;align-items:center;font-size:17.1px}.radios input{width:auto;flex:none;margin:0}.radios label{white-space:nowrap;cursor:pointer}.radios.cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px 14px}
 .dlg .acts{justify-content:flex-end}
 .ai{border:1px dashed var(--gold-line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;background:var(--gold-pale)}
 .ai b{color:var(--gold)}
@@ -466,16 +466,18 @@ function renderBoss(){
   $('bAll').onchange=e=>{bossAll=e.target.checked;renderBoss();};
   $('bPrint').onclick=printDlg;
 }
+const PCOLS=[['contact','聯絡人'],['count','去年人數'],['names','去年出席名單'],['gift','去年贊助'],['note','備註'],['box','邀請／不邀 勾選'],['memo','老闆備註（空白欄）']];
 function printDlg(){
+  let pc={contact:1,count:1,names:1,gift:0,note:1,box:1,memo:1};try{Object.assign(pc,JSON.parse(localStorage.getItem('kc37-pcols')||'{}'));}catch(_){}
   const n={pending:[...INV.values()].filter(i=>stage(i)==='boss').length,all:[...INV.values()].length};
   openDlg(`<h3>列印 A4 名冊</h3><p class="sub">給老闆看去年的資料，在紙上勾「邀請／不邀」，回來再到「確認名單」逐筆按。</p>
    <div class="f"><label>範圍</label><div class="radios"><label><input type="radio" name="p_sc" value="pending" ${n.pending?'checked':''}>只印待確認（${n.pending} 筆）</label><label><input type="radio" name="p_sc" value="all" ${n.pending?'':'checked'}>全部名單（${n.all} 筆）</label></div></div>
-   <div class="f"><label>內容</label><div class="radios"><label><input type="checkbox" id="p_names" checked>去年出席名單</label><label><input type="checkbox" id="p_gift" checked>去年贊助品</label><label><input type="checkbox" id="p_box" checked>邀請／不邀 勾選欄</label></div></div>
+   <div class="f" style="align-items:start"><label>要印的欄位</label><div><div class="radios cols">${PCOLS.map(([k,t])=>`<label><input type="checkbox" data-pcol="${k}" ${pc[k]?'checked':''}>${t}</label>`).join('')}</div><div class="muted" style="margin-top:6px">單位名稱一定會印；勾選會記住，下次不用再選。</div></div></div>
    <div class="f"><label>紙張方向</label><div class="radios"><label><input type="radio" name="p_or" value="landscape" checked>橫印（欄位較寬）</label><label><input type="radio" name="p_or" value="portrait">直印</label></div></div>
    <p class="muted">會下載一個網頁檔，用電腦打開後按上方「列印」，紙張選 A4。</p>
    <div class="acts" style="display:flex;gap:8px"><button id="dCancel">取消</button><button class="primary" id="dOk">下載列印檔</button></div>`);
   $('dCancel').onclick=closeDlg;
-  $('dOk').onclick=()=>{const o={scope:document.querySelector('input[name=p_sc]:checked').value,names:$('p_names').checked,gift:$('p_gift').checked,box:$('p_box').checked,orient:document.querySelector('input[name=p_or]:checked').value};
+  $('dOk').onclick=()=>{const o={scope:document.querySelector('input[name=p_sc]:checked').value,orient:document.querySelector('input[name=p_or]:checked').value};const sv={};document.querySelectorAll('[data-pcol]').forEach(c=>{o[c.dataset.pcol]=c.checked;sv[c.dataset.pcol]=c.checked?1:0;});try{localStorage.setItem('kc37-pcols',JSON.stringify(sv));}catch(_){}
     const list=[...INV.values()].filter(i=>o.scope==='all'?true:stage(i)==='boss');
     if(!list.length){toast('沒有可以列印的名單');return;}
     offer(o.scope==='all'?'尾牙邀請名冊_全部.html':'尾牙邀請名冊_待老闆確認.html',registerHTML(list,o));closeDlg();};
@@ -488,12 +490,12 @@ function registerHTML(list,o){
   const date=new Date().toLocaleDateString('zh-TW',{year:'numeric',month:'long',day:'numeric'});
   let n=0;
   const rows=its=>its.map(i=>{n++;const names=S_(i.lyNames);
-    return `<tr><td class="no">${n}</td><td class="u"><b>${esc(i.unit)}</b>${i.contact?`<div>${esc(i.contact)}</div>`:''}${i.merge?`<div class="sm">回覆併入「${esc(i.merge)}」</div>`:''}</td>
-     <td class="c">${i.lyCount!=null?`<b>${i.lyCount}</b>`:'<span class="sm">—</span>'}</td>
+    return `<tr><td class="no">${n}</td><td class="u"><b>${esc(i.unit)}</b>${o.contact&&i.contact?`<div>${esc(i.contact)}</div>`:''}${i.merge?`<div class="sm">回覆併入「${esc(i.merge)}」</div>`:''}</td>
+     ${o.count?`<td class="c">${i.lyCount!=null?`<b>${i.lyCount}</b>`:'<span class="sm">—</span>'}</td>`:''}
      ${o.names?`<td class="nm">${esc(names)}</td>`:''}${o.gift?`<td class="gf">${esc(i.lyGift)}</td>`:''}
-     <td class="nt">${esc(i.lyNote)}</td>
-     ${o.box?`<td class="bx">${status(i)==='邀請'?'☑':'☐'}</td><td class="bx">${status(i)==='不邀'?'☑':'☐'}</td><td class="memo"></td>`:''}</tr>`;}).join('');
-  const head=`<tr><th class="no">#</th><th>單位／邀請對象</th><th class="c">去年<br>人數</th>${o.names?'<th>去年出席名單</th>':''}${o.gift?'<th>去年贊助</th>':''}<th>備註</th>${o.box?'<th class="bx">邀請</th><th class="bx">不邀</th><th class="memo">老闆備註</th>':''}</tr>`;
+     ${o.note?`<td class="nt">${esc(i.lyNote)}</td>`:''}
+     ${o.box?`<td class="bx">${status(i)==='邀請'?'☑':'☐'}</td><td class="bx">${status(i)==='不邀'?'☑':'☐'}</td>`:''}${o.memo?'<td class="memo"></td>':''}</tr>`;}).join('');
+  const head=`<tr><th class="no">#</th><th class="uh">單位／邀請對象</th>${o.count?'<th class="c">去年<br>人數</th>':''}${o.names?'<th>去年出席名單</th>':''}${o.gift?'<th>去年贊助</th>':''}${o.note?'<th>備註</th>':''}${o.box?'<th class="bx">邀請</th><th class="bx">不邀</th>':''}${o.memo?'<th class="memo">老闆備註</th>':''}</tr>`;
   return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>冠成尾牙 邀請名冊</title><style>
 @page{size:A4 ${o.orient};margin:11mm 10mm 13mm}
 *{box-sizing:border-box}body{margin:0;font-family:"Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;color:#1d1714;-webkit-print-color-adjust:exact;print-color-adjust:exact}
