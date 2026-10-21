@@ -294,8 +294,8 @@ $('bXlsx').onclick=async()=>{if(typeof ExcelJS==='undefined'){toast('Excel 元�
   // 邀請與回覆
   const st=i=>i.boss==='no'?'不邀請':i.boss!=='yes'?'待老闆確認':!i.sent?'待發送':i.merge?`併入 ${i.merge}`:!i.reply?'等回覆':i.reply==='yes'?'出席':'不克出席';
   const tyGift=i=>s.gl.filter(g=>{const v=invFor(g.unit);return v&&v.id===i.id;}).map(g=>g.item).join('；');
-  sheet('邀請與回覆',[['分類',10],['單位',24],['邀請對象',22],['邀請方式',9],['老闆確認',9],['發送日',11],['今年狀態',12],['今年人數',9],['今年名單',40],['素食',6],['不吃牛',7],['兒童椅',7],['今年贊助',30],['去年人數',9],['去年名單',40],['去年贊助',30],['備註',30]],
-    [...INV].sort((a,b)=>(GROUPS.indexOf(a.group)+99)%99-(GROUPS.indexOf(b.group)+99)%99||a.id.localeCompare(b.id)).map(i=>[i.group,i.unit,i.contact,i.channel,i.boss==='yes'?'邀請':i.boss==='no'?'不邀':'待確認',i.sentAt||'',st(i),i.reply==='yes'?Number(i.count)||0:'',S_(i.names),i.veg||'',countMark(i.names,/不吃牛/g)||'',countMark(i.names,/兒童椅/g)||'',tyGift(i),i.lyCount??'',S_(i.lyNames),S_(i.lyGift),[i.note,i.lyNote].filter(Boolean).join('；')]));
+  sheet('邀請與回覆',[['分類',10],['單位',24],['代表品牌',10],['邀請對象',22],['邀請方式',9],['老闆確認',9],['發送日',11],['今年狀態',12],['今年人數',9],['今年名單',40],['素食',6],['不吃牛',7],['兒童椅',7],['今年贊助',30],['去年人數',9],['去年名單',40],['去年贊助',30],['備註',30]],
+    [...INV].sort((a,b)=>(GROUPS.indexOf(a.group)+99)%99-(GROUPS.indexOf(b.group)+99)%99||a.id.localeCompare(b.id)).map(i=>[i.group,i.unit,i.brand||'',i.contact,i.channel,i.boss==='yes'?'邀請':i.boss==='no'?'不邀':'待確認',i.sentAt||'',st(i),i.reply==='yes'?Number(i.count)||0:'',S_(i.names),i.veg||'',countMark(i.names,/不吃牛/g)||'',countMark(i.names,/兒童椅/g)||'',tyGift(i),i.lyCount??'',S_(i.lyNames),S_(i.lyGift),[i.note,i.lyNote].filter(Boolean).join('；')]));
   // 出席名單（每人一列）
   const gById=new Map(SG.map(g=>[g.id,g])),tById=new Map(ST.map(t=>[t.id,t])),arr=new Set(ARR.filter(a=>a.in).map(a=>a.id));
   const people=SP.length?SP.map(p=>{const g=gById.get(p.gid)||{};const t=tById.get(p.t);return[g.unit||'',g.catRaw||'',p.name,[p.veg?'素':'',p.nobeef?'不吃牛':'',p.child?'兒童椅':'',p.stage?'上台':'',p.mob?'行動不便':''].filter(Boolean).join('、'),t?t.no:'未安排',t?t.name||'':'',arr.has(p.id)?'✓':''];})

@@ -439,12 +439,12 @@ function parts(i){const st=stage(i);const w=canWrite;
     acts=w&&!i.merge?`<button class="ghost" data-reply="${i.id}">修改回覆</button>`:'';}
   return {st,state,acts,w};}
 function rowHTML(i){const {st,state,acts,w}=parts(i);
-  return `<div class="row"><div class="who"><div class="u"><b>${esc(i.unit)}</b>${i.src==='網站報名'||i.src==='網站新報名'?'<span class="tag new">網站報名</span>':''}${i.channel&&st!=='send'?`<span class="tag">${esc(i.channel)}</span>`:''}</div>${i.contact?`<div class="ct">${esc(i.contact)}</div>`:''}${lyHTML(i)?`<div class="ly">${lyHTML(i)}</div>`:''}</div>
+  return `<div class="row"><div class="who"><div class="u"><b>${esc(i.unit)}</b>${i.brand?`<span class="tag" style="border-color:var(--gold-line);color:var(--gold)">${esc(i.brand)}</span>`:''}${i.src==='網站報名'||i.src==='網站新報名'?'<span class="tag new">網站報名</span>':''}${i.channel&&st!=='send'?`<span class="tag">${esc(i.channel)}</span>`:''}</div>${i.contact?`<div class="ct">${esc(i.contact)}</div>`:''}${lyHTML(i)?`<div class="ly">${lyHTML(i)}</div>`:''}</div>
    <div class="state">${state.includes('class="line"')?state:`<div class="line">${state}</div>`}</div><div class="acts">${acts}${w?`<button class="ghost" data-edit="${i.id}" aria-label="編輯 ${esc(i.unit)}">編輯</button>`:''}</div></div>`;}
 
 function trHTML(i){const {st,state,acts,w}=parts(i);
   const ly2=[i.lyGift?`<div class="sm">${esc(i.lyGift)}</div>`:'',i.lyNote?`<div class="mt">${esc(i.lyNote)}</div>`:''].join('');
-  return `<tr><td class="u"><b>${esc(i.unit)}</b>${i.src==='網站報名'||i.src==='網站新報名'?'<span class="tag new">網站</span>':''}${i.channel?`<span class="tag">${esc(i.channel)}</span>`:''}</td>
+  return `<tr><td class="u"><b>${esc(i.unit)}</b>${i.brand?`<span class="tag" style="border-color:var(--gold-line);color:var(--gold)">${esc(i.brand)}</span>`:''}${i.src==='網站報名'||i.src==='網站新報名'?'<span class="tag new">網站</span>':''}${i.channel?`<span class="tag">${esc(i.channel)}</span>`:''}</td>
    <td class="sm">${esc(i.contact)}</td><td class="n">${i.lyCount!=null?i.lyCount:'<span class="mt">—</span>'}</td><td>${ly2||'<span class="mt">—</span>'}</td>
    <td class="state">${state.includes('class="line"')?state:`<div class="line">${state}</div>`}</td>
    <td class="ac">${acts}${w?`<button class="ghost" data-edit="${i.id}" aria-label="編輯 ${esc(i.unit)}">編輯</button>`:''}</td></tr>`;}
@@ -558,6 +558,7 @@ function editDlg(i){const isNew=!i;i=i?clone(i):{id:'m'+Date.now().toString(36),
    <div class="f"><label for="e_ch">邀請方式</label><select id="e_ch">${['LINE','紙本','親送','電話'].map(c=>`<option ${c===i.channel?'selected':''}>${c}</option>`).join('')}</select></div>
    <div class="f"><label for="e_addr">地址／電話</label><input id="e_addr" value="${esc([i.addr,i.fax].filter(Boolean).join('　'))}"></div>
    <div class="f"><label for="e_ly">去年紀錄</label><input id="e_ly" value="${esc(lyText(i))}" placeholder="例：去年 3 人・贊助 微波爐"></div>
+   <div class="f"><label for="e_brand">代表品牌</label><input id="e_brand" value="${esc(i.brand||'')}" placeholder="例：國際牌、日立（同品牌會排在一起）" list="brandList"><datalist id="brandList">${['日立','國際牌','東元','聲寶','大金','禾聯','LG','三洋','大同','冰點','奇美','歌林','萬士益','惠而浦','元山'].map(b=>`<option value="${b}">`).join('')}</datalist></div>
    <div class="f"><label for="e_merge">回覆併入</label><input id="e_merge" value="${esc(i.merge)}" placeholder="只寄卡給高層、由業務統一回覆時，填該單位名稱"></div>
    ${!isNew?`<div class="f"><label>進度</label><div class="radios"><label><input type="checkbox" id="e_sent" ${i.sent?'checked':''}>已發送</label><span class="muted">老闆：${i.boss==='yes'?'邀請':i.boss==='no'?'不邀':'待確認'}</span></div></div>`:''}
    <div class="acts" style="display:flex;gap:8px;flex-wrap:wrap">${!isNew?'<button class="ghost" id="dDel" style="margin-right:auto;color:var(--warn)">刪除這筆</button>':''}<button id="dCancel">取消</button><button class="primary" id="dOk">儲存</button></div>`);
@@ -567,7 +568,7 @@ function editDlg(i){const isNew=!i;i=i?clone(i):{id:'m'+Date.now().toString(36),
     undoToast(`已刪除「${orig.unit}」`,async()=>{await save(orig);toast(`已還原「${orig.unit}」`);});};
   $('dOk').onclick=async()=>{const u=S_($('e_unit').value);if(!u){toast('請填單位名稱');return;}
     const lyChanged=S_($('e_ly').value)!==lyText(i);
-    Object.assign(i,{unit:u,contact:S_($('e_ct').value),group:$('e_g').value,channel:$('e_ch').value,merge:S_($('e_merge').value)});
+    Object.assign(i,{brand:S_($('e_brand').value),unit:u,contact:S_($('e_ct').value),group:$('e_g').value,channel:$('e_ch').value,merge:S_($('e_merge').value)});
     const ad=S_($('e_addr').value);if(ad!==[i.addr,i.fax].filter(Boolean).join('　')){i.addr=ad;i.fax='';}
     if(lyChanged){i.lyNote=S_($('e_ly').value);i.lyCount=null;i.lyGift='';}
     if($('e_sent')){const s=$('e_sent').checked;if(s&&!i.sent)i.sentAt=today();i.sent=s;}
@@ -677,7 +678,7 @@ async function importWeb(file){
   return importRows(rows);}
 async function importRows(rows,mode){
   const H=(r,re)=>{const k=Object.keys(r).find(h=>re.test(h));return k?S_(r[k]):'';};
-  const recs=rows.map(r=>({unit:H(r,/公司|單位名稱/),cat:H(r,/類別/),person:H(r,/貴姓|填表人/),title:H(r,/職稱/),attend:H(r,/是否出席/),count:H(r,/總參加人數|參加人數/),names:H(r,/參加人員|名單/),veg:H(r,/素食/),gift:[H(r,/獎品[（(]?一/),H(r,/獎品[（(]?二/)].filter(Boolean).join('；'),note:H(r,/其他需求|備註/)})).filter(r=>r.unit||r.person);
+  const recs=rows.map(r=>({brand:H(r,/品牌/),unit:H(r,/公司|單位名稱/),cat:H(r,/類別/),person:H(r,/貴姓|填表人/),title:H(r,/職稱/),attend:H(r,/是否出席/),count:H(r,/總參加人數|參加人數/),names:H(r,/參加人員|名單/),veg:H(r,/素食/),gift:[H(r,/獎品[（(]?一/),H(r,/獎品[（(]?二/)].filter(Boolean).join('；'),note:H(r,/其他需求|備註/)})).filter(r=>r.unit||r.person);
   if(!recs.length){if(mode)return 0;toast('檔案裡沒有報名資料，請確認是「冠成尾牙 網站報名（回覆）」下載的檔案');return;}
   const agg=new Map();
   recs.forEach(r=>{const inv=findInv(r.unit||r.person);const key=inv?inv.id:'w'+ukey(r.unit||r.person).replace(/[^\w一-鿿]/g,'').slice(0,40);
@@ -689,9 +690,9 @@ async function importRows(rows,mode){
     const count=yes.reduce((a,r)=>a+(parseInt(r.count,10)||0),0)||names.length;
     const base=inv?clone(inv):(INV.get(key)?clone(INV.get(key)):{id:key,unit:rs[0].unit||rs[0].person,contact:'',group:'網站新報名',channel:'網站',addr:'',fax:'',lyCount:null,lyNames:'',lyNote:CAT2G[rs[0].cat]?`報名類別：${rs[0].cat}`:'',lyGift:'',bossNote:'',reminders:[],merge:'',src:'網站新報名'});
     const next={...base,boss:'yes',sent:true,sentAt:base.sentAt||today(),reply:yes.length?'yes':'no',count:yes.length?count:0,names:names.join('，'),veg:vegCount(names.join(' '))+(yes.reduce((a,r)=>a+(/（素）|\(素\)/.test(r.names)?0:(parseInt(r.veg,10)||0)),0)),
-      note:[...new Set(rs.map(r=>r.note).filter(Boolean))].join('；')||base.note||'',webGift:[...new Set(rs.map(r=>r.gift).filter(Boolean))].join('；'),contact:base.contact||[rs[0].person,rs[0].title].filter(Boolean).join(' '),src:inv?'網站報名':'網站新報名'};
+      note:[...new Set(rs.map(r=>r.note).filter(Boolean))].join('；')||base.note||'',webGift:[...new Set(rs.map(r=>r.gift).filter(Boolean))].join('；'),contact:base.contact||[rs[0].person,rs[0].title].filter(Boolean).join(' '),brand:rs.map(r=>r.brand).find(Boolean)||base.brand||'',src:inv?'網站報名':'網站新報名'};
     if(!inv&&!INV.get(key))fresh++;else matched++;
-    const cmp=o=>JSON.stringify([o.boss,o.sent,o.reply,o.count,o.names,o.veg,o.note,o.webGift,o.contact]);
+    const cmp=o=>JSON.stringify([o.boss,o.sent,o.reply,o.count,o.names,o.veg,o.note,o.webGift,o.contact,o.brand||'']);
     if(!INV.get(next.id)||cmp(INV.get(next.id))!==cmp(next))changed.push(next);
   }
   if(mode==='count')return changed.length;
@@ -726,7 +727,7 @@ const G2CAT={'廠商':'廠商','外包師傅':'同行','協力廠商':'同行','
 function catFor(i){if(i.group==='社團親友'&&/親友|家人/.test(i.unit))return'親友';if(i.group==='網站新報名'){const m=/報名類別：(.+)/.exec(i.lyNote||'');return m?m[1]:'';}return G2CAT[i.group]||'';}
 $('bExport').onclick=()=>{const att=[...INV.values()].filter(i=>!i.merge&&i.reply==='yes');
   if(!att.length){toast('還沒有確定出席的單位');return;}
-  const rows=att.map(i=>({'時間戳記':'','公司／單位名稱':i.unit,'單位類別':catFor(i),'貴姓大名':i.contact,'代表人職稱':'','是否出席':'會出席','總參加人數':i.count||'','參加人員完整名單':S_(i.names),'素食人數':i.veg||0,'是否願意贊助尾牙摸彩獎品':i.webGift?'是':'','贊助獎品（一）':i.webGift||'','其他需求':i.note||''}));
+  const rows=att.map(i=>({'時間戳記':'','公司／單位名稱':i.unit,'單位類別':catFor(i),'貴姓大名':i.contact,'代表人職稱':'','是否出席':'會出席','總參加人數':i.count||'','參加人員完整名單':S_(i.names),'素食人數':i.veg||0,'是否願意贊助尾牙摸彩獎品':i.webGift?'是':'','贊助獎品（一）':i.webGift||'','其他需求':i.note||'','代表品牌':i.brand||''}));
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'出席名單');
   offer('冠成尾牙_出席名單.xlsx',new Uint8Array(XLSX.write(wb,{bookType:'xlsx',type:'array'})));};
 $('bXlsx').onclick=()=>{const L={boss:'待老闆確認',skip:'不邀請',send:'待發送',wait:'等回覆',replied:'已回覆'};

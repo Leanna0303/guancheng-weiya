@@ -553,6 +553,7 @@ function addGroup(r){
   const g={id:uid(),unit,company,person,title,phone:S_(r.phone),cat:catOf(r.cat),catRaw:S_(r.cat),note:S_(r.note),
     countRaw:cnum,namesN:parsed.length,gift1:S_(r.gift1),gift2:S_(r.gift2),due:S_(r.due),wish:S_(r.wish),src:r.src||''};
   const sp=S_(r.sponsor);g.sponsor=(/^是|願意|yes/i.test(sp)&&!/^否/.test(sp))||!!(g.gift1||g.gift2);
+  g.brand=S_(r.brand);
   g.mismatch=!absent&&cnum!=null&&cnum>0&&parsed.length>0&&parsed.length!==cnum;
   const ppl=parsed.slice(0,n);while(ppl.length<n)ppl.push({name:`${unit} 來賓${ppl.length+1}`});
   g.count=n;S.groups.push(g);
@@ -574,10 +575,11 @@ const FIELDS=[
  ['gift2','贊助獎品（二）',/獎品[\s(（]*二|獎品\s*2/],
  ['due','贊助品交付日',/交付/],
  ['wish','祝賀詞',/祝賀|祝福|賀詞/],
- ['note','備註／特殊需求',/備註|同桌|需求/]
+ ['note','備註／特殊需求',/備註|同桌|需求/],
+ ['brand','代表品牌',/品牌/]
 ];
 function guess(headers){const used=new Set(),m={};
-  for(const k of ['veg','gift1','gift2','due','wish','sponsor','attend','count','names','title','phone','cat','person','company','note']){const f=FIELDS.find(x=>x[0]===k);
+  for(const k of ['brand','veg','gift1','gift2','due','wish','sponsor','attend','count','names','title','phone','cat','person','company','note']){const f=FIELDS.find(x=>x[0]===k);
     const h=headers.find(h=>!used.has(h)&&f[2].test(h)&&!(k==='count'&&/素/.test(h))&&!(k==='veg'&&/牛|兒童/.test(h)));
     if(h){m[k]=h;used.add(h);}else m[k]='';}
   return m;}
@@ -638,7 +640,7 @@ async function fromInvites(){
   let snap;try{snap=await rdb.collection('invites').get();}catch(_){toast('讀不到邀請名冊，請稍後再試');return;}
   const inv=snap.docs.map(d=>({...d.data(),id:d.id})).filter(i=>!i.merge&&i.reply==='yes');
   if(!inv.length){toast('邀請名冊裡還沒有確定出席的單位');return;}
-  const fileRows=inv.map(i=>({src:'邀請名冊',company:i.unit,cat:catForInv(i),person:i.contact||'',title:'',attend:'會出席',count:String(i.count||''),names:String(i.names||''),veg:String(i.veg||0),phone:'',sponsor:i.webGift?'是':'',gift1:i.webGift||'',gift2:'',due:'',wish:'',note:i.note||''}));
+  const fileRows=inv.map(i=>({src:'邀請名冊',brand:i.brand||'',company:i.unit,cat:catForInv(i),person:i.contact||'',title:'',attend:'會出席',count:String(i.count||''),names:String(i.names||''),veg:String(i.veg||0),phone:'',sponsor:i.webGift?'是':'',gift1:i.webGift||'',gift2:'',due:'',wish:'',note:i.note||''}));
   const total=inv.reduce((a,i)=>a+(Number(i.count)||0),0);const hasReal=S.groups.length&&!S.sample;
   openDlg(`<h3>從邀請名冊更新出席名單</h3><p>邀請名冊目前確定出席 <b>${inv.length}</b> 個單位、<b>${total}</b> 位。</p>
    ${hasReal?'<p class="muted">已排好座位的人不會動；新出席的會放到左邊「未安排」；名冊上取消的會從座位移除。你在這裡手動新增的名單（員工、現場加入等）會保留。</p>':'<p class="muted">會換掉目前的範例資料，所有人先放到左邊「未安排」。</p>'}
@@ -675,7 +677,7 @@ function fillByName(){
   const free=t=>capOf(t)-inT(t.id).length;
   const unGroups=[...new Set(S.people.filter(p=>!p.t).map(p=>p.gid))].map(G);
   const log=new Map();let placed=0;const nofit=[];
-  const matchUnit=(g,t)=>{const a=unitKey(g.unit),b=tableKey(t.name);return b.length>=2&&a.length>=2&&(a.includes(b)||b.includes(a));};
+  const matchUnit=(g,t)=>{const a=unitKey(g.unit),b=tableKey(t.name),br=unitKey(g.brand||'');return b.length>=2&&((a.length>=2&&(a.includes(b)||b.includes(a)))||(br.length>=2&&(br===b||b.includes(br)||br.includes(b))));};
   const matchCat=(g,t)=>{const b=tableKey(t.name);return (CAT_WORDS[g.cat]||[]).some(w=>b.includes(w))||b===CAT[g.cat].label;};
   const place=(g,tabs,byUnit)=>{const ps=S.people.filter(p=>p.gid===g.id&&!p.t);if(!ps.length)return;const n0=ps.length;
     const whole=tabs.find(t=>free(t)>=ps.length);
@@ -713,7 +715,7 @@ function render(){
   if(ct)$('pickbar').innerHTML=`<span>正在排 <b>第 ${esc(ct.no)} 桌</b>${ct.name?' '+esc(ct.name):''}（${inT(ct.id).length}/${capOf(ct)}）：點下面人名放進這桌，點單位名稱整組放入</span><button data-unpick>完成</button>`;
   const byG=new Map();un.forEach(p=>{if(!byG.has(p.gid))byG.set(p.gid,[]);byG.get(p.gid).push(p);});
   const gs=[...byG.keys()].map(G).sort((a,b)=>CAT[a.cat].i-CAT[b.cat].i);
-  $('pool').innerHTML=gs.length?gs.map(g=>`<div class="grp" style="--cc:var(--c-${g.cat})"><div class="ghead"><button class="gname" draggable="true" data-gsel="${g.id}" data-where="pool">${esc(g.unit)} · ${byG.get(g.id).length}人</button>${catSelect(g)}</div>${g.note?`<div class="gnote">${esc(g.note)}</div>`:''}<div class="chips">${byG.get(g.id).map(chip).join('')}</div></div>`).join('')
+  $('pool').innerHTML=gs.length?gs.map(g=>`<div class="grp" style="--cc:var(--c-${g.cat})"><div class="ghead"><button class="gname" draggable="true" data-gsel="${g.id}" data-where="pool">${esc(g.unit)} · ${byG.get(g.id).length}人${g.brand&&g.brand!==g.unit?`<small style="color:var(--gold);font-weight:700;margin-left:4px">［${esc(g.brand)}］</small>`:''}</button>${catSelect(g)}</div>${g.note?`<div class="gnote">${esc(g.note)}</div>`:''}<div class="chips">${byG.get(g.id).map(chip).join('')}</div></div>`).join('')
     :`<div class="empty">${total?'所有人都已安排好座位。':'還沒有名單。按「匯入報名資料」或「＋ 手動新增名單」開始。'}</div>`;
   $('unitlist').innerHTML=[...new Set(S.groups.map(g=>g.unit))].map(u=>`<option value="${esc(u)}">`).join('');
   renderPlan();renderDetail();renderCards();renderStatsView();renderInvView();renderSel();
@@ -1214,7 +1216,7 @@ $('bHelp').onclick=()=>{openDlg(`<h3>使用說明</h3><ol class="tips">
   <li><b>匯入報名</b>：打開 Google 雲端硬碟的「冠成尾牙 網站報名（回覆）」→ 檔案 → 下載 → Excel，按「匯入報名資料」。</li>
   <li><b>加入沒報名的</b>：員工、家扶、學生、扶輪社、親友，用「＋ 手動新增名單」貼上名單。需求寫在名字後面：（素）（不吃牛）（兒童椅）（上台）（行動不便）。</li>
   <li><b>排桌</b>：先點平面圖上的一桌，再點左邊人名就放進這桌；點單位名稱整組放入。</li>
-  <li><b>照桌名填人</b>：先把桌名取成廠商或單位名稱（例如「日立」「聲寶」「扶輪社」），或類別（「員工」「家扶」「學校」），按「照桌名填人」，對應的人就自動坐進去。人多就再取「日立2」。已排好的人不會動。</li>
+  <li><b>照桌名填人</b>：先把桌名取成廠商或單位名稱（例如「日立」「聲寶」「扶輪社」），或類別（「員工」「家扶」「學校」），按「照桌名填人」，對應的人就自動坐進去。人多就再取「日立2」。也會比對報名時填的「代表品牌」，例如桌名取「國際牌」，台灣松下、台灣松下銷售的人都會進來。已排好的人不會動。</li>
   <li><b>🔄 整桌互換</b>：先在任何桌把人湊齊，再點 A 桌、B 桌，整桌人和桌名對調。</li>
   <li><b>改名、標記需求</b>：點桌內名單的 ✏️；↩ 退回未安排；🗑 刪除（取消出席）。</li>
   <li><b>名單變動</b>：重新匯入時選「更新名單」，已排好的人不動，新報名的進「未安排」，取消的自動移除。</li>

@@ -141,7 +141,8 @@ input:focus,textarea:focus{outline:none;border-color:var(--gold);background:#fff
 .stepper button:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
 .stepper output{min-width:56px;text-align:center;font-weight:700;font-size:20px;font-variant-numeric:tabular-nums}
 .subbox{display:flex;flex-direction:column;gap:28px;padding:24px 22px;border-radius:16px;background:#FBF4E7;border:1px solid #EFE2C9}
-.subbox[hidden]{display:none}
+[hidden]{display:none!important}
+.subbox[hidden]{display:none!important}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 @media (max-width:540px){.grid2{grid-template-columns:1fr}}
 .err{color:var(--err);font-size:16px;display:none}
@@ -187,7 +188,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--gold);background:#fff
 
 /* ---------- thanks ---------- */
 .thanks{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:24px;background:rgba(46,16,18,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
-.thanks[hidden]{display:none}
+.thanks[hidden]{display:none!important}
 .thanks .box{background:var(--card);border-radius:22px;text-align:center;padding:48px 30px 40px;max-width:420px;width:100%;position:relative;box-shadow:0 40px 80px -30px rgba(0,0,0,.45)}
 .thanks .box::after{content:"";position:absolute;inset:8px;border:1px solid var(--hair);border-radius:16px;pointer-events:none}
 .thanks h3{margin:0;font-family:var(--en);font-style:italic;font-weight:500;font-size:40px;line-height:1.1;color:var(--ink)}
@@ -351,6 +352,30 @@ br.m{display:none}
           <input type="radio" name="cat" id="c8" value="其他"><label for="c8">其他</label>
         </div>
         <div class="err">請選擇單位類別</div>
+      </div>
+
+      <div class="fg" id="brandFg" hidden>
+        <span class="lb">代表品牌（選填）</span>
+        <div class="hint">您代表哪個品牌出席？方便我們把同品牌的貴賓安排在一起。</div>
+        <div class="chips" role="radiogroup" aria-label="代表品牌">
+          <input type="radio" name="brand" id="bd0" value="日立"><label for="bd0">日立</label>
+          <input type="radio" name="brand" id="bd1" value="國際牌"><label for="bd1">國際牌</label>
+          <input type="radio" name="brand" id="bd2" value="東元"><label for="bd2">東元</label>
+          <input type="radio" name="brand" id="bd3" value="聲寶"><label for="bd3">聲寶</label>
+          <input type="radio" name="brand" id="bd4" value="大金"><label for="bd4">大金</label>
+          <input type="radio" name="brand" id="bd5" value="禾聯"><label for="bd5">禾聯</label>
+          <input type="radio" name="brand" id="bd6" value="LG"><label for="bd6">LG</label>
+          <input type="radio" name="brand" id="bd7" value="三洋"><label for="bd7">三洋</label>
+          <input type="radio" name="brand" id="bd8" value="大同"><label for="bd8">大同</label>
+          <input type="radio" name="brand" id="bd9" value="冰點"><label for="bd9">冰點</label>
+          <input type="radio" name="brand" id="bd10" value="奇美"><label for="bd10">奇美</label>
+          <input type="radio" name="brand" id="bd11" value="歌林"><label for="bd11">歌林</label>
+          <input type="radio" name="brand" id="bd12" value="萬士益"><label for="bd12">萬士益</label>
+          <input type="radio" name="brand" id="bd13" value="惠而浦"><label for="bd13">惠而浦</label>
+          <input type="radio" name="brand" id="bd14" value="元山"><label for="bd14">元山</label>
+          <input type="radio" name="brand" id="bdx" value="其他"><label for="bdx">其他</label>
+        </div>
+        <input type="text" id="brandOther" name="brandOther" placeholder="請輸入品牌名稱" hidden style="margin-top:12px">
       </div>
 
       <div class="fg">
@@ -531,6 +556,8 @@ f.addEventListener('change', e => {
     const on = e.target.value === '會出席';
     $('attendBox').hidden = !on;
   }
+  if (e.target.name === 'cat') $('brandFg').hidden = e.target.value !== '廠商';
+  if (e.target.name === 'brand') { $('brandOther').hidden = e.target.value !== '其他'; if (e.target.value === '其他') $('brandOther').focus(); }
   if (e.target.name === 'sponsor') $('sponsorBox').hidden = e.target.value !== '是';
   const fg = e.target.closest('.fg'); if (fg) fg.classList.remove('bad');
 });
@@ -563,7 +590,7 @@ f.addEventListener('submit', async e => {
   const ppl = attending ? collectPeople() : [];
   const gl = sponsoring ? collectGifts() : [];
   const data = new URLSearchParams({
-    company, cat: E('cat').value, name: E('name').value.trim(), title: E('title').value.trim(),
+    company, cat: E('cat').value, brand: E('cat').value === '廠商' ? (E('brand').value === '其他' ? E('brandOther').value.trim() : (E('brand').value || '')) : '', name: E('name').value.trim(), title: E('title').value.trim(),
     phone: '', attend: E('attend').value,
     count: String(ppl.length), names: ppl.map(p => p.n + (p.t ? ' ' + p.t : '') + (p.v ? '（素）' : '') + (p.c ? '（兒童椅）' : '')).join('，'), veg: String(ppl.filter(p => p.v).length),
     child: String(ppl.filter(p => p.c).length), note: attending ? E('note').value.trim() : '',
