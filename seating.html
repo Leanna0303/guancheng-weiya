@@ -590,9 +590,15 @@ function resetForReal(){const keep={cap:S.cap,tables:S.tables,invites:S.invites|
 async function onImportFile(file){
   if(typeof XLSX==='undefined'){toast('讀檔元件載入失敗，請重新整理頁面');return;}
   let wb;try{wb=await readFile(file);}catch(e){toast('無法讀取這個檔案，請確認是 CSV 或 Excel');return;}
-  const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:'',raw:false});
-  if(!rows.length){toast('檔案裡沒有資料列');return;}
-  const headers=Object.keys(rows[0]);const m=guess(headers);
+  // pick the sheet whose headers look most like a registration list
+  let best=null;wb.SheetNames.forEach(n=>{const r=XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:'',raw:false});if(!r.length)return;const g=guess(Object.keys(r[0]));const sc=Object.values(g).filter(Boolean).length+(g.names?2:0)+(g.company?2:0);if(!best||sc>best.sc)best={rows:r,m:g,sc};});
+  const isSummary=wb.SheetNames.includes('總覽')&&wb.SheetNames.includes('邀請與回覆');
+  if(isSummary||!best||best.sc<3){openDlg(`<h3>${isSummary?'這是年度總結，不用匯入':'這個檔案不是報名名單'}</h3><p>${isSummary?'「年度總結」是尾牙結束後存檔、明年參考用的，不是報名名單，所以不用匯入座位系統。':`「${esc(file.name)}」裡找不到「公司／單位名稱」「參加名單」這類欄位，沒辦法自動對應。`}</p>
+     <p>要把出席名單放進座位系統，直接按<b>「從名冊更新出席名單」</b>就好，不需要任何檔案。</p>
+     <div class="acts"><button id="dCancel">取消</button>${typeof fromInvites==='function'?'<button class="primary" id="dUse">改用「從名冊更新出席名單」</button>':''}</div>`);
+    $('dCancel').onclick=closeDlg;if($('dUse'))$('dUse').onclick=()=>{closeDlg();fromInvites();};return;}
+  const rows=best.rows;
+  const headers=Object.keys(rows[0]);const m=best.m;
   const opt=v=>'<option value="">（不使用）</option>'+headers.map(h=>`<option ${h===v?'selected':''}>${esc(h)}</option>`).join('');
   const hasReal=S.groups.length&&!S.sample;
   openDlg(`<h3>對應欄位</h3><p class="muted">「${esc(file.name)}」讀到 ${rows.length} 筆回覆，已自動對應網站報名表的欄位。</p>
