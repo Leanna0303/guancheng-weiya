@@ -356,7 +356,7 @@ br.m{display:none}
 
       <div class="fg" id="brandFg" hidden>
         <span class="lb">代表品牌（選填）</span>
-        <div class="hint">您代表哪個品牌出席？方便我們把同品牌的貴賓安排在一起。</div>
+        <div class="hint" id="brandHint">您代表哪個品牌出席？方便我們把同品牌的貴賓安排在一起。</div>
         <div class="chips" role="radiogroup" aria-label="代表品牌">
           <input type="radio" name="brand" id="bd0" value="日立"><label for="bd0">日立</label>
           <input type="radio" name="brand" id="bd1" value="國際牌"><label for="bd1">國際牌</label>
@@ -551,7 +551,33 @@ gifts.addEventListener('click', e => { if (e.target.closest('.del')) { e.target.
 function resetLists() { people.innerHTML = ''; personRow(); gifts.innerHTML = ''; giftRow(); }
 resetLists();
 
+const BRAND_KW = [['日立','日立','hitachi'],['國際牌','國際牌','國際','松下','panasonic'],['東元','東元','teco'],['聲寶','聲寶','sampo'],['大金','大金','daikin'],['禾聯','禾聯','heran'],['LG','lg','樂金'],['三洋','三洋','sanyo','sanlux'],['大同','大同','tatung'],['冰點','冰點','巨遠'],['奇美','奇美','新視代','chimei'],['歌林','歌林','kolin'],['萬士益','萬士益','maxe'],['惠而浦','惠而浦','whirlpool'],['元山','元山']];
+let brandManual = false, brandAuto = '', catAuto = false;
+const BRAND_HINT = '您代表哪個品牌出席？方便我們把同品牌的貴賓安排在一起。';
+function guessBrand() {
+  if (brandManual) return;
+  const v = $('company').value.toLowerCase().replace(/\s/g, '');
+  const hit = v && !/國小|國中|高中|高工|高商|高職|大學|學校|學院|扶輪|獅子|農會|協會|公所|政府|局$|議會/.test(v) ? BRAND_KW.find(([, ...kw]) => kw.some(k => v.includes(k))) : null;
+  const hint = $('brandHint');
+  if (hit) {
+    const cat = f.querySelector('input[name=cat]:checked');
+    if (!cat || cat.value === '廠商') {
+      if (!cat) { const c = f.querySelector('input[name=cat][value="廠商"]'); if (c) { c.checked = true; catAuto = true; } }
+      $('brandFg').hidden = false;
+      const r = f.querySelector(`input[name=brand][value="${hit[0]}"]`); if (r) r.checked = true;
+      $('brandOther').hidden = true; brandAuto = hit[0];
+      hint.textContent = `已依公司名稱自動幫您選好「${hit[0]}」，不對的話再點選即可。`;
+    }
+  } else if (brandAuto) {
+    const r = f.querySelector(`input[name=brand][value="${brandAuto}"]`); if (r) r.checked = false;
+    brandAuto = ''; hint.textContent = BRAND_HINT;
+    if (catAuto) { const c = f.querySelector('input[name=cat]:checked'); if (c) c.checked = false; catAuto = false; $('brandFg').hidden = true; }
+  }
+}
+$('company').addEventListener('input', guessBrand);
 f.addEventListener('change', e => {
+  if (e.target.name === 'brand' && e.isTrusted) { brandManual = true; $('brandHint').textContent = BRAND_HINT; }
+  if (e.target.name === 'cat' && e.isTrusted) catAuto = false;
   if (e.target.name === 'attend') {
     const on = e.target.value === '會出席';
     $('attendBox').hidden = !on;
@@ -604,7 +630,7 @@ f.addEventListener('submit', async e => {
       ? `已收到 <b>${esc(company)}</b> 共 ${ppl.length} 位的出席回覆，<br>期待晚宴與您相見。`
       : '已收到您的回覆，<br>感謝您的祝福，期待下次相聚。';
     $('thanks').hidden = false; $('thxOk').focus();
-    f.reset(); resetLists(); $('attendBox').hidden = true; $('sponsorBox').hidden = true;
+    f.reset(); resetLists(); brandManual = false; brandAuto = ''; catAuto = false; $('brandHint').textContent = BRAND_HINT; $('brandFg').hidden = true; $('brandOther').hidden = true; $('attendBox').hidden = true; $('sponsorBox').hidden = true;
   } catch (err) {
     $('formmsg').textContent = '送出失敗，請檢查網路後再試一次。';
   } finally {
