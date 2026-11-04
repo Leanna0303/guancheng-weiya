@@ -584,7 +584,7 @@ body.sealed .hero .seq,body.sealed .branch path,body.sealed .branch circle{anima
 const CONFIG = {
   anniversary: '37',
   date: '116 年 1 月 14 日（星期四）',   // 例：'116 年 1 月 13 日（星期三）'
-  hall: '',                              // 例：'成都廳'
+  hall: '成都廳',                              // 例：'成都廳'
   deadline: '115 年 12 月 31 日（四）',                          // 例：'115 年 12 月 31 日'
   endpoint: 'https://script.google.com/macros/s/AKfycbx4J4jwRwaeZ1l8qbJXbwGf486TUU8jgg4FR1YHfr9CZgAne3XlDPVl-ayJx8q2mGw/exec'
 };
@@ -601,7 +601,7 @@ $('heroDate').textContent = CONFIG.date;
   const zhDigits=x=>String(x).split('').map(d=>zhD[d]).join('');
   const when=m?`中華民國${zhDigits(m[1])}年${zhNum(+m[2])}月${zhNum(+m[3])}日${wd?'（星期'+wd[1]+'）':''}`:CONFIG.date;
   const L=t=>`<span class="ln">${t}</span>`;
-  $('formal').innerHTML=L('謹訂於')+L(m?`中華民國${zhDigits(m[1])}年${zhNum(+m[2])}月${zhNum(+m[3])}日`:CONFIG.date)+L(`${wd?'（星期'+wd[1]+'）':''}晚上五時五十分`)+L(`假　<b>大中華國際美食館</b>${CONFIG.hall?'　'+CONFIG.hall:''}`)+L('舉辦')+`<span class="big"><span class="ln">${zhNum(n)}週年慶</span><span class="ln">暨歲末年終寒冬送暖晚會</span></span>`+L('敬備薄酌　恭候　光臨');
+  $('formal').innerHTML=L('謹訂於')+L(m?`中華民國${zhDigits(m[1])}年${zhNum(+m[2])}月${zhNum(+m[3])}日`:CONFIG.date)+L(`${wd?'（星期'+wd[1]+'）':''}晚上五時五十分`)+L(`假　<b>大中華國際美食館</b>`)+L(CONFIG.hall?`<b>${CONFIG.hall}</b>　舉辦`:'舉辦')+`<span class="big"><span class="ln">${zhNum(n)}週年慶</span><span class="ln">暨歲末年終寒冬送暖晚會</span></span>`+L('敬備薄酌　恭候　光臨');
   if(m){const y=+m[1]+1911,mo=String(m[2]).padStart(2,'0'),d=String(m[3]).padStart(2,'0');
     const url='https://calendar.google.com/calendar/render?action=TEMPLATE&text='+encodeURIComponent('冠成家電 '+n+' 週年慶暨尾牙晚會')+'&dates='+y+mo+d+'T175000/'+y+mo+d+'T213000&ctz=Asia/Taipei&location='+encodeURIComponent('大中華國際美食館 彰化縣和美鎮彰美路四段306號')+'&details='+encodeURIComponent('晚上 5:50 入席，6:00 準時開始');
     const a=$('calLink');a.href=url;a.hidden=false;}})();
