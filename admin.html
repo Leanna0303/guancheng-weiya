@@ -253,8 +253,8 @@ h3 small{font-family:var(--body);font-weight:500;font-size:14px;color:var(--mute
   </div>
 
   <div class="site">
-    <div><b>報名網站（給賓客）</b><div class="url">https://leanna0303.github.io/guancheng-weiya/</div><div class="d" id="webN" style="font-size:14.5px;color:var(--muted)"></div></div>
-    <div class="acts"><button id="copy">複製網址</button><a class="btn" href="./" target="_blank" rel="noopener" onclick="this.href='./?v='+Date.now()">看網站</a></div>
+    <div><b>報名網站（給賓客）</b><div class="url">https://leanna0303.github.io/guancheng-weiya/invite2.html?v=3</div><div class="d" id="webN" style="font-size:14.5px;color:var(--muted)"></div></div>
+    <div class="acts"><button id="copy">複製網址</button><a class="btn" href="https://leanna0303.github.io/guancheng-weiya/invite2.html?v=3" target="_blank" rel="noopener">看網站</a></div>
   </div>
 
   <section>
@@ -383,7 +383,7 @@ $('tlAll').onclick=()=>{tlAll=true;$('tlAll').classList.add('on');$('tlNow').cla
 let DB=null;
 document.addEventListener('change',async e=>{const k=e.target.dataset.ck;if(!k||!DB)return;CHK={...CHK,[k]:e.target.checked};renderFlow();try{await DB.doc('check/flow').set(CHK);}catch(_){toast('儲存失敗');}});
 render();renderFlow();
-$('copy').onclick=async()=>{try{await navigator.clipboard.writeText('https://leanna0303.github.io/guancheng-weiya/');toast('已複製報名網址');}catch(_){toast('請手動複製：leanna0303.github.io/guancheng-weiya');}};
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText('https://leanna0303.github.io/guancheng-weiya/invite2.html?v=3');toast('已複製報名網址');}catch(_){toast('請手動複製：https://leanna0303.github.io/guancheng-weiya/invite2.html?v=3');}};
 (async()=>{const db=await claude.use('db');DB=db;
   db.doc('flow/main').onSnapshot(s=>{FLOW=s.exists?s.data():null;renderFlow();});
   db.doc('check/flow').onSnapshot(s=>{CHK=s.exists?{...s.data()}:{};renderFlow();});
