@@ -364,7 +364,7 @@ table.lg{width:100%;border-collapse:collapse;font-size:15.9px;min-width:980px}
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const S_=v=>String(v??'').trim();
-const GROUPS=['廠商','外包師傅','協力廠商','政商','教育界','廠牌高層','社團親友','柏緯朋友','員工','公益','其他貴賓','網站新報名'];
+const GROUPS=['廠商','外包師傅','協力廠商/同行','政商','教育界','廠牌高層','社團親友','柏緯朋友','員工','公益','其他貴賓','網站新報名'];
 const DEF_CFG={date:'116 年 1 月（日期確認中）',time:'下午 5:50 入席，6:00 準時開始',venue:'大中華國際美食館（彰化縣和美鎮彰美路四段 306 號）',site:'https://leanna0303.github.io/guancheng-weiya/',deadline:'',sender:'冠成家電'};
 let db=null,sample=null,dl=null,canWrite=true,live=false;
 let INV=new Map(),CFG={...DEF_CFG};
@@ -731,7 +731,7 @@ async function importRows(rows,mode){
 async function offer(filename,data){
   if(dl){try{await dl.save({filename,data});toast('已下載 '+filename);return;}catch(e){if(e&&e.code==='declined')return;}}
   toast('這裡無法下載檔案');}
-const G2CAT={'廠商':'廠商','外包師傅':'同行','協力廠商':'同行','政商':'政府機關／民代','教育界':'學校','社團親友':'社團','柏緯朋友':'朋友','員工':'員工','公益':'公益單位','其他貴賓':'貴賓'};
+const G2CAT={'廠商':'廠商','外包師傅':'同行','協力廠商':'同行','協力廠商/同行':'同行','政商':'政府機關／民代','教育界':'學校','社團親友':'社團','柏緯朋友':'朋友','員工':'員工','公益':'公益單位','其他貴賓':'貴賓'};
 function catFor(i){if(i.group==='社團親友'&&/親友|家人/.test(i.unit))return'親友';if(i.group==='網站新報名'){const m=/報名類別：(.+)/.exec(i.lyNote||'');return m?m[1]:'';}return G2CAT[i.group]||'';}
 $('bExport').onclick=()=>{const att=[...INV.values()].filter(i=>!i.merge&&i.reply==='yes');
   if(!att.length){toast('還沒有確定出席的單位');return;}
@@ -830,7 +830,7 @@ render();
   if(user){const c=await user.can('data.write');if(c===false){canWrite=false;$('roBanner').hidden=false;}}
   try{db=await claude.use('db');}catch(_){db=null;}
   if(!db){$('noDb').hidden=false;live=true;render();return;}
-  db.collection('invites').onSnapshot(snap=>{const m=new Map();snap.docs.forEach(d=>{const old=INV.get(d.id);m.set(d.id,{...d.data(),id:d.id,...(old&&old._justDecided?{_justDecided:true}:{})});});INV=m;live=true;render();checkWeb();},
+  db.collection('invites').onSnapshot(snap=>{const m=new Map();snap.docs.forEach(d=>{const old=INV.get(d.id);m.set(d.id,{...d.data(),...(d.data().group==='協力廠商'?{group:'協力廠商/同行'}:{}),id:d.id,...(old&&old._justDecided?{_justDecided:true}:{})});});INV=m;live=true;render();checkWeb();},
     e=>{toast('資料連線中斷，請重新整理頁面');});
   db.doc('config/event').onSnapshot(s=>{CFG={...DEF_CFG,...(s.exists?s.data():{})};},()=>{});
 })();

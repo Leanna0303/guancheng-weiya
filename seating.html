@@ -639,7 +639,7 @@ function applyRows(fileRows,update,replace){
     fileRows.forEach(addGroup);
     closeDlg();commit();toast(`已匯入 ${S.groups.length-before} 筆、共 ${S.people.length} 人，都在左邊「未安排」`);
 }
-const G2CAT={'廠商':'廠商','外包師傅':'同行','協力廠商':'同行','政商':'政府機關／民代','教育界':'學校','社團親友':'社團','柏緯朋友':'朋友','員工':'員工','公益':'公益單位','其他貴賓':'貴賓'};
+const G2CAT={'廠商':'廠商','外包師傅':'同行','協力廠商':'同行','協力廠商/同行':'同行','政商':'政府機關／民代','教育界':'學校','社團親友':'社團','柏緯朋友':'朋友','員工':'員工','公益':'公益單位','其他貴賓':'貴賓'};
 function catForInv(i){if(i.group==='社團親友'&&/親友|家人/.test(i.unit))return'親友';if(i.group==='網站新報名'){const m=/報名類別：(.+)/.exec(i.lyNote||'');return m?m[1]:'';}return G2CAT[i.group]||'';}
 async function fromInvites(){
   if(!rdb){toast('還沒連上資料，請稍候再試');return;}

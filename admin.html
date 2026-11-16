@@ -387,7 +387,7 @@ $('copy').onclick=async()=>{try{await navigator.clipboard.writeText('https://lea
 (async()=>{const db=await claude.use('db');DB=db;
   db.doc('flow/main').onSnapshot(s=>{FLOW=s.exists?s.data():null;renderFlow();});
   db.doc('check/flow').onSnapshot(s=>{CHK=s.exists?{...s.data()}:{};renderFlow();});
-  db.collection('invites').onSnapshot(q=>{INV=q.docs.map(d=>({...d.data(),id:d.id}));render();});
+  db.collection('invites').onSnapshot(q=>{INV=q.docs.map(d=>({...d.data(),id:d.id})).map(i=>i.group==='協力廠商'?{...i,group:'協力廠商/同行'}:i);render();});
   db.collection('sp').onSnapshot(q=>{SP=q.docs.map(d=>({...d.data(),id:d.id}));render();});
   db.collection('arrive').onSnapshot(q=>{ARR=q.docs.map(d=>d.data());render();});
   db.collection('gifts').onSnapshot(q=>{GIFT=q.docs.map(d=>d.data());render();});
