@@ -146,7 +146,7 @@ h1{margin:2px 0 4px;font-family:var(--display);font-weight:900;font-size:clamp(3
 .cd span{font-size:16px}
 @media (max-width:640px){.cd{text-align:left}}
 .wrap{max-width:1080px;margin:-44px auto 0;padding-block:0 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:26px;position:relative}
-.doors{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.doors{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
 @media (max-width:1000px){.doors{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:760px){.doors{grid-template-columns:minmax(0,1fr)}}
 .door{display:flex;flex-direction:column;gap:14px;background:var(--sheet);border:1px solid var(--hair);border-radius:18px;padding:22px 24px;text-decoration:none;box-shadow:0 10px 30px -18px rgba(78,11,19,.4);transition:transform .15s,border-color .15s}
@@ -250,6 +250,11 @@ h3 small{font-family:var(--body);font-weight:500;font-size:14px;color:var(--mute
       <p>從名冊帶入出席名單、排桌、列印總表、當天報到。</p>
       <div class="kpis" id="kSeat"><div class="kpi"><b>—</b><span>載入中</span></div></div>
     </a>
+    <a class="door" href="lottery.html">
+      <div class="h"><h2>抽獎排序</h2><span class="go">打開 →</span></div>
+      <p>依贊助品價值排順序、檢查頒獎人重複、播放抽獎畫面、下載 PPT。</p>
+      <div class="kpis" id="kLot"><div class="kpi"><b>—</b><span>載入中</span></div></div>
+    </a>
   </div>
 
   <div class="site">
@@ -285,7 +290,7 @@ h3 small{font-family:var(--body);font-weight:500;font-size:14px;color:var(--mute
 (()=>{
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let INV=[],SP=[],ARR=[],CFG={},WEB=null,GIFT=[];
+let INV=[],SP=[],ARR=[],CFG={},WEB=null,GIFT=[],LOT=null;
 function stage(i){if(i.boss==='no')return'skip';if(i.boss!=='yes')return'boss';if(!i.sent)return'send';if(i.merge)return'replied';if(!i.reply)return'wait';return'replied';}
 function toast(m){const d=document.createElement('div');d.className='toast';d.textContent=m;document.body.appendChild(d);setTimeout(()=>d.remove(),2600);}
 function rocDate(s){const m=/(\d{2,3})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/.exec(s||'');return m?new Date(+m[1]+1911,+m[2]-1,+m[3]):null;}
@@ -301,6 +306,8 @@ function render(){
   const seated=SP.filter(p=>p.t).length,arr=ARR.filter(a=>a.in).length;const tables=new Set(SP.filter(p=>p.t).map(p=>p.t)).size;
   $('kSeat').innerHTML=kpi(SP.length,'座位名單人數')+kpi(seated,'已入座','ok')+kpi(SP.length-seated,'未安排','warn')+kpi(arr?arr:tables,arr?'已報到':'使用桌數');
   $('kRep').innerHTML=kpi(WEB==null?'—':WEB,'網站報名')+kpi(new Set(GIFT.map(g=>g.unit)).size,'贊助單位','gold')+kpi(GIFT.filter(g=>g.received).length+'/'+GIFT.length,'贊助品已收到','ok');
+  {const off=LOT&&LOT.rows?Object.values(LOT.rows).filter(r=>r.off).length:0;const n=GIFT.length-off;
+   $('kLot').innerHTML=kpi(n,'抽獎項目','gold')+kpi(LOT&&LOT.order&&LOT.order.length?'✓':'—',LOT&&LOT.order&&LOT.order.length?'已排順序':'還沒排',LOT&&LOT.order&&LOT.order.length?'ok':'warn');}
   $('webN').textContent=WEB==null?'':`網站上已收到 ${WEB} 筆報名${dl?`・回覆期限 ${CFG.deadline}${days(dl)>=0?`（還有 ${days(dl)} 天）`:'（已過）'}`:''}`;
   const S=[
     {t:'確認邀請名單',d:'列印 A4 名冊給老闆勾選，再到「確認名單」逐筆按。',done:INV.length&&!c('boss'),info:c('boss')?`還有 ${c('boss')} 筆`:'完成'},
@@ -381,11 +388,20 @@ $('tlEdit').onclick=()=>{if(!FLOW){toast('流程表還在載入');return;}EDIT=J
 $('tlNow').onclick=()=>{tlAll=false;$('tlNow').classList.add('on');$('tlAll').classList.remove('on');renderFlow();};
 $('tlAll').onclick=()=>{tlAll=true;$('tlAll').classList.add('on');$('tlNow').classList.remove('on');renderFlow();};
 let DB=null;
+// one-time wording fixes in the saved flow: 家扶 is 和美家扶中心; 抽獎排序 now lives in the workbench
+let flowFixed=false;
+function fixName(t){if(!t||/LINE/.test(t))return t;return t.replace(/彰化家扶(中心)?/g,'和美家扶中心').replace(/和美家扶(?!中心)/g,'和美家扶中心').replace(/(^|[^美化])家扶(?!中心)/g,'$1和美家扶中心');}
+function fixFlow(){if(flowFixed||!FLOW||!DB||EDIT)return;flowFixed=true;
+  const F=JSON.parse(JSON.stringify(FLOW));
+  F.stages.forEach(st=>st.items.forEach(it=>{it.t=fixName(it.t);if(/Claude/.test(it.tip||''))it.tip='到工作台「抽獎排序」：依價值排順序、檢查頒獎人重複、播放或下載 PPT';}));
+  F.day=(F.day||[]).map(fixName);(F.notes||[]).forEach(n=>{n.l=(n.l||[]).map(fixName);});
+  if(JSON.stringify(F)!==JSON.stringify(FLOW)){FLOW=F;DB.doc('flow/main').set(F).catch(()=>{flowFixed=false;});}}
 document.addEventListener('change',async e=>{const k=e.target.dataset.ck;if(!k||!DB)return;CHK={...CHK,[k]:e.target.checked};renderFlow();try{await DB.doc('check/flow').set(CHK);}catch(_){toast('儲存失敗');}});
 render();renderFlow();
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText('https://leanna0303.github.io/guancheng-weiya/invite2.html?v=3');toast('已複製報名網址');}catch(_){toast('請手動複製：https://leanna0303.github.io/guancheng-weiya/invite2.html?v=3');}};
 (async()=>{const db=await claude.use('db');DB=db;
-  db.doc('flow/main').onSnapshot(s=>{FLOW=s.exists?s.data():null;renderFlow();});
+  db.doc('flow/main').onSnapshot(s=>{FLOW=s.exists?s.data():null;fixFlow();renderFlow();});
+  db.doc('flow/lottery').onSnapshot(s=>{LOT=s.exists?s.data():null;render();});
   db.doc('check/flow').onSnapshot(s=>{CHK=s.exists?{...s.data()}:{};renderFlow();});
   db.collection('invites').onSnapshot(q=>{INV=q.docs.map(d=>({...d.data(),id:d.id})).map(i=>i.group==='協力廠商'?{...i,group:'協力廠商/同行'}:i);render();});
   db.collection('sp').onSnapshot(q=>{SP=q.docs.map(d=>({...d.data(),id:d.id}));render();});

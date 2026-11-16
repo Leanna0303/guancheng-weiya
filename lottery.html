@@ -1,0 +1,334 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style><script>window.__KC_PREFIXES=['gifts/','flow/','config/'];</script><script>/* Stand-in for the Claude page runtime: the same claude.use('db') / ('downloads') calls,
+   backed by the 冠成 Apps Script + Google Sheet, with a shared passcode. */
+(()=>{
+const API='https://script.google.com/macros/s/AKfycbx4J4jwRwaeZ1l8qbJXbwGf486TUU8jgg4FR1YHfr9CZgAne3XlDPVl-ayJx8q2mGw/exec';
+const PREFIXES=window.__KC_PREFIXES||null;
+const KEYK='kc37-passcode';
+let key=null;try{key=localStorage.getItem(KEYK);}catch(_){}
+async function call(body,tries=0){
+  let r;try{r=await fetch(API,{method:'POST',body:JSON.stringify({...body,key})});}
+  catch(e){if(tries<2){await new Promise(s=>setTimeout(s,1200*(tries+1)));return call(body,tries+1);}const x=new Error('network');x.code='unavailable';throw x;}
+  let j;try{j=await r.json();}catch(_){const x=new Error('bad response');x.code='unavailable';throw x;}
+  if(!j.ok){const x=new Error(j.error||'error');x.code=j.error==='bad_key'?'invalid_argument':'unavailable';x.badKey=j.error==='bad_key';throw x;}
+  return j;
+}
+window.__kcCall=call;
+
+// ---------- passcode gate ----------
+let readyRes;const ready=new Promise(r=>readyRes=r);
+function gate(msg){
+  const d=document.createElement('div');
+  d.style.cssText='position:fixed;inset:0;z-index:99;display:grid;place-items:center;padding:16px;background:rgba(30,10,12,.72)';
+  d.innerHTML=`<form style="background:#FFFDF9;color:#2E2622;border-radius:18px;border-top:4px solid #7A1520;padding:26px 24px;max-width:380px;width:100%;display:flex;flex-direction:column;gap:12px;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;box-shadow:0 24px 70px rgba(0,0,0,.4)">
+    <div style="font-family:'Noto Serif TC',serif;font-size:22px;font-weight:900;letter-spacing:.06em">請輸入通關密碼</div>
+    <div style="font-size:15px;color:#5C514A">冠成尾牙內部使用，密碼請向負責同仁索取。這台裝置輸入一次就會記住。</div>
+    <input id="kcPass" autocomplete="current-password" type="password" style="font:inherit;font-size:18px;padding:10px 12px;border:1px solid #D9BF8A;border-radius:10px" aria-label="通關密碼">
+    <div id="kcErr" style="color:#B5541B;font-size:14px;min-height:1em">${msg||''}</div>
+    <button style="font:inherit;font-size:17px;font-weight:700;padding:10px;border:none;border-radius:999px;background:#7A1520;color:#F6E7C8;cursor:pointer">進入</button></form>`;
+  document.body.appendChild(d);const f=d.querySelector('form');setTimeout(()=>d.querySelector('input').focus(),0);
+  f.onsubmit=async e=>{e.preventDefault();const v=d.querySelector('input').value.trim();if(!v)return;key=v;d.querySelector('#kcErr').textContent='確認中…';
+    try{await call({op:'list',since:Date.now()+86400000});try{localStorage.setItem(KEYK,key);}catch(_){}d.remove();readyRes();}
+    catch(err){d.querySelector('#kcErr').textContent=err.badKey?'密碼不對，請再確認一次。':'連不上伺服器，請檢查網路後再試。';}};
+}
+async function start(){
+  if(key){try{await call({op:'list',since:Date.now()+86400000});readyRes();return;}catch(e){if(!e.badKey){readyRes();return;}}}
+  gate(key?'密碼已變更，請重新輸入。':'');
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
+window.kcLogout=()=>{try{localStorage.removeItem(KEYK);}catch(_){}location.reload();};
+
+// ---------- document store with polling ----------
+const cache=new Map();           // "coll/id" -> data
+const colL=new Map(),docL=new Map();
+const pend=new Map();            // key -> {json, waiters:[]}
+const inflight=new Set();
+let since=0,firstDone=false,firstRes;const first=new Promise(r=>firstRes=r);
+const depth=p=>p.split('/').length;
+const snapOf=(id,v)=>({id,exists:v!==undefined,data:()=>v,metadata:{fromCache:false,hasPendingWrites:false}});
+function colSnap(c){const docs=[];cache.forEach((v,k)=>{if(k.startsWith(c+'/')&&depth(k)===depth(c)+1)docs.push(snapOf(k.slice(c.length+1),v));});
+  docs.sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);return{docs,size:docs.length,empty:!docs.length,docChanges:()=>[],metadata:{fromCache:false,hasPendingWrites:false}};}
+function emit(keys){const cs=new Set(),ds=new Set();keys.forEach(k=>{ds.add(k);cs.add(k.slice(0,k.lastIndexOf('/')));});
+  cs.forEach(c=>(colL.get(c)||[]).forEach(fn=>{try{fn(colSnap(c));}catch(e){console.error(e);}}));
+  ds.forEach(d=>(docL.get(d)||[]).forEach(fn=>{try{fn(snapOf(d.split('/').pop(),cache.get(d)));}catch(e){console.error(e);}}));}
+async function poll(){
+  try{const j=await call({op:'list',since,prefixes:PREFIXES});
+    const ch=[];
+    j.docs.forEach(d=>{if(pend.has(d.k)||inflight.has(d.k))return;
+      if(d.del){if(cache.has(d.k)){cache.delete(d.k);ch.push(d.k);}}
+      else{const cur=cache.get(d.k);if(cur===undefined||JSON.stringify(cur)!==d.json){try{cache.set(d.k,JSON.parse(d.json));ch.push(d.k);}catch(_){}}}});
+    since=j.now-4000;
+    if(!firstDone){firstDone=true;firstRes();colL.forEach((fns,c)=>fns.forEach(fn=>fn(colSnap(c))));docL.forEach((fns,d)=>fns.forEach(fn=>fn(snapOf(d.split('/').pop(),cache.get(d)))));}
+    else if(ch.length)emit(ch);
+    setStatus('');
+  }catch(e){if(e.badKey){gate('密碼已變更，請重新輸入。');return;}setStatus('offline');}
+  setTimeout(poll,document.hidden?30000:6000);
+}
+ready.then(poll);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&firstDone)poll();});
+let flushT=null;
+function queue(k,json){return new Promise((res,rej)=>{const p=pend.get(k)||{waiters:[]};p.json=json;p.waiters.push({res,rej});pend.set(k,p);clearTimeout(flushT);flushT=setTimeout(flush,250);});}
+async function flush(){if(!pend.size)return;const items=[...pend.entries()].slice(0,150);items.forEach(([k])=>{pend.delete(k);inflight.add(k);});
+  try{await call({op:'write',writes:items.map(([k,p])=>({k,json:p.json}))});items.forEach(([,p])=>p.waiters.forEach(w=>w.res()));}
+  catch(e){items.forEach(([k,p])=>p.waiters.forEach(w=>w.rej(e)));}
+  finally{items.forEach(([k])=>inflight.delete(k));if(pend.size)flush();}}
+function setOne(k,data){const d=JSON.parse(JSON.stringify(data));cache.set(k,d);emit([k]);return queue(k,JSON.stringify(d));}
+function delOne(k){cache.delete(k);emit([k]);return queue(k,null);}
+function docRef(path){return{id:path.split('/').pop(),path,
+  set:d=>setOne(path,d),
+  update:d=>setOne(path,{...(cache.get(path)||{}),...d}),
+  delete:()=>delOne(path),
+  get:async()=>{await first;return snapOf(path.split('/').pop(),cache.get(path));},
+  onSnapshot:(fn)=>{if(!docL.has(path))docL.set(path,[]);docL.get(path).push(fn);if(firstDone)setTimeout(()=>fn(snapOf(path.split('/').pop(),cache.get(path))),0);return()=>{const a=docL.get(path);a.splice(a.indexOf(fn),1);};},
+  collection:c=>colRef(path+'/'+c)};}
+function colRef(c){return{path:c,doc:id=>docRef(c+'/'+(id||Math.random().toString(36).slice(2,12))),
+  add:async d=>{const r=docRef(c+'/'+Math.random().toString(36).slice(2,12));await r.set(d);return r;},
+  get:async()=>{await first;return colSnap(c);},
+  onSnapshot:(fn)=>{if(!colL.has(c))colL.set(c,[]);colL.get(c).push(fn);if(firstDone)setTimeout(()=>fn(colSnap(c)),0);return()=>{const a=colL.get(c);a.splice(a.indexOf(fn),1);};}};}
+const db={doc:docRef,collection:colRef};
+window.addEventListener('beforeunload',e=>{if(pend.size||inflight.size){e.preventDefault();e.returnValue='';}});
+
+// ---------- connection badge ----------
+let badge=null;
+function setStatus(s){if(!badge){badge=document.createElement('div');badge.style.cssText='position:fixed;left:max(12px,env(safe-area-inset-left,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:60;background:#B5541B;color:#fff;border-radius:999px;padding:6px 14px;font:600 14px "Noto Sans TC",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25)';badge.hidden=true;document.body.appendChild(badge);}
+  badge.hidden=!s;badge.textContent='⚠️ 網路中斷，恢復後會自動同步';}
+
+// ---------- downloads ----------
+const downloads={save:async({filename,data})=>{
+  const type=/\.html?$/i.test(filename)?'text/html;charset=utf-8':/\.xlsx$/i.test(filename)?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':/\.json$/i.test(filename)?'application/json':/\.jpe?g$/i.test(filename)?'image/jpeg':'application/octet-stream';
+  const blob=data instanceof Blob?data:new Blob([data],{type});const url=URL.createObjectURL(blob);
+  if(/\.html?$/i.test(filename)){const w=window.open(url,'_blank');if(w){setTimeout(()=>URL.revokeObjectURL(url),60000);return;}}
+  const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}};
+
+// ---------- back to top ----------
+function topBtn(){const b=document.createElement('button');b.type='button';b.setAttribute('aria-label','回到最上面');b.title='回到最上面';
+  b.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg><span style="font-size:12px;font-weight:700;line-height:1">頂部</span>';
+  b.style.cssText='position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:55;width:60px;height:60px;border-radius:50%;border:none;background:#7A1520;color:#F6E7C8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;box-shadow:0 8px 24px rgba(78,11,19,.35);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;transform:translateY(8px);font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif';
+  b.onclick=()=>window.scrollTo({top:0,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth'});
+  document.body.appendChild(b);
+  const upd=()=>{const on=window.scrollY>500;b.style.opacity=on?'1':'0';b.style.pointerEvents=on?'auto':'none';b.style.transform=on?'none':'translateY(8px)';};
+  window.addEventListener('scroll',upd,{passive:true});upd();}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',topBtn);else topBtn();
+
+window.claude={use:async n=>{if(n==='db'){await ready;return db;}if(n==='downloads')return downloads;return null;}};
+})();
+</script></head><body><title>冠成尾牙抽獎排序</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Noto+Serif+TC:wght@500;700;900&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+:root{
+  --paper:#FAF6EE; --sheet:#FFFDF9; --sunk:#F3ECDF; --hair:#E6DACA;
+  --ink:#2E2622; --ink-2:#5C514A; --muted:#8C7F74;
+  --lacquer:#7A1520; --lacquer-deep:#4E0B13; --on-lacquer:#F6E7C8;
+  --gold:#A8843F; --gold-line:#D9BF8A; --gold-pale:#F4E7CB;
+  --ok:#2F6F4A; --ok-pale:#E3EFE6; --warn:#B5541B; --warn-pale:#F8E8DC;
+  --display:"Noto Serif TC","Songti TC","PMingLiU",serif;
+  --body:"Noto Sans TC","Microsoft JhengHei","PingFang TC",system-ui,sans-serif;
+  --num:"Cormorant Garamond","Times New Roman",serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#16110F; --sheet:#1F1916; --sunk:#29211D; --hair:#3A302A; --ink:#F1E9DF; --ink-2:#CDBFB1; --muted:#9E9084;
+  --lacquer:#5E1019; --lacquer-deep:#3A070E; --on-lacquer:#F3E2BF; --gold:#D8B46E; --gold-line:#8C7340; --gold-pale:#3A2F1C;
+  --ok:#6CC08F; --ok-pale:#1F3328; --warn:#F09A62; --warn-pale:#3B2619; color-scheme:dark}}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.top{background:radial-gradient(120% 140% at 85% 0%,var(--lacquer) 0%,var(--lacquer-deep) 75%);color:var(--on-lacquer)}
+.top .in{max-width:1180px;margin:0 auto;padding:20px max(16px,env(safe-area-inset-right,0px)) 26px max(16px,env(safe-area-inset-left,0px));display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.top a.back{font-size:15px;color:var(--gold-line);text-decoration:none}
+h1{margin:4px 0 0;font-family:var(--display);font-weight:900;font-size:clamp(28px,4.5vw,38px);letter-spacing:.1em}
+.top .acts{display:flex;gap:8px;flex-wrap:wrap}
+main{max-width:1180px;margin:0 auto;padding:22px max(16px,env(safe-area-inset-right,0px)) 90px max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:20px}
+button,.btn{font:inherit;font-size:15.5px;border:1px solid var(--hair);background:var(--sheet);color:var(--ink);border-radius:999px;padding:8px 16px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;min-height:42px}
+button:hover{border-color:var(--gold)}
+button:disabled{opacity:.5;cursor:default}
+.primary{background:var(--lacquer)!important;border-color:var(--lacquer)!important;color:var(--on-lacquer)!important;font-weight:700}
+.top .acts button{background:transparent;color:var(--on-lacquer);border-color:color-mix(in srgb,var(--gold-line) 60%,transparent)}
+.top .acts button.gold{background:var(--gold-line);color:var(--lacquer-deep);font-weight:700;border-color:var(--gold-line)}
+h3{margin:0 0 10px;font-family:var(--display);font-size:22px;letter-spacing:.06em;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+h3::before{content:"";width:20px;height:1px;background:var(--gold);align-self:center}
+h3 small{font-family:var(--body);font-weight:500;font-size:14px;color:var(--muted);letter-spacing:0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.kpi{background:var(--sheet);border:1px solid var(--hair);border-radius:14px;padding:12px 16px;display:flex;flex-direction:column}
+.kpi b{font-family:var(--num);font-size:36px;line-height:1.05;font-weight:600;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1}
+.kpi span{font-size:14px;color:var(--muted)}
+.kpi.warn b{color:var(--warn)}.kpi.ok b{color:var(--ok)}.kpi.gold b{color:var(--gold)}
+.checks{background:var(--sheet);border:1px solid var(--hair);border-radius:16px;overflow:hidden}
+.checks div{padding:11px 18px;border-top:1px solid var(--hair);font-size:15.5px;display:flex;gap:10px}
+.checks div:first-child{border-top:none}
+.checks .w{color:var(--warn);font-weight:700;white-space:nowrap}
+.checks .g{color:var(--ok);font-weight:700}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.bar .hint{font-size:14px;color:var(--muted)}
+.tw{background:var(--sheet);border:1px solid var(--hair);border-radius:16px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:900px}
+th{font-size:13.5px;color:var(--muted);font-weight:700;text-align:left;padding:10px 10px;background:var(--sunk);white-space:nowrap}
+td{padding:8px 10px;border-top:1px solid var(--hair);vertical-align:middle;font-size:15.5px}
+td.no{font-family:var(--num);font-size:24px;font-weight:600;color:var(--gold);text-align:center;width:52px;font-variant-numeric:lining-nums}
+td .it{font-weight:700}
+td .sm{font-size:13.5px;color:var(--muted)}
+td input[type=text],td input[type=number],td select{font:inherit;font-size:15px;color:var(--ink);background:var(--paper);border:1px solid var(--hair);border-radius:8px;padding:5px 8px;width:100%}
+td input[type=number]{width:110px;text-align:right}
+td select{width:96px}
+td input[type=checkbox]{width:20px;height:20px;accent-color:var(--lacquer)}
+td .mv{display:flex;gap:4px}
+td .mv button{min-height:32px;padding:2px 10px;font-size:14px}
+tr.flag td{background:var(--warn-pale)}
+tr.off td{opacity:.45}
+tr.tierhead td{background:var(--gold-pale);font-family:var(--display);font-weight:700;font-size:16px;color:var(--lacquer);padding:6px 12px}
+.tag{font-size:12.5px;border-radius:999px;padding:1px 8px;border:1px solid var(--hair);color:var(--muted);white-space:nowrap}
+.tag.warn{border-color:var(--warn);color:var(--warn)}
+.toast{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:9px 18px;border-radius:999px;font-size:15px;z-index:120}
+.empty{padding:30px;text-align:center;color:var(--muted)}
+/* show mode */
+#show{position:fixed;inset:0;z-index:100;background:radial-gradient(120% 140% at 50% 0%,#8A1824 0%,#3A070E 80%);color:#F6E7C8;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:5vh 6vw;user-select:none}
+#show .frame{position:absolute;inset:3vh 3vw;border:1px solid rgba(217,191,138,.6);outline:1px solid rgba(217,191,138,.3);outline-offset:-10px;border-radius:6px;pointer-events:none}
+#show .k{font-family:var(--num);font-style:italic;font-size:clamp(18px,2.4vw,30px);letter-spacing:.08em;color:#D9BF8A}
+#show .tier{font-family:var(--display);font-weight:900;font-size:clamp(34px,6vw,84px);letter-spacing:.2em;color:#F4D58C;margin:1vh 0}
+#show .item{font-family:var(--display);font-weight:900;font-size:clamp(36px,6.5vw,96px);line-height:1.25;color:#fff;max-width:90vw}
+#show .by{margin-top:4vh;font-size:clamp(20px,2.8vw,38px)}
+#show .by b{color:#F4D58C}
+#show .nav{position:absolute;bottom:4vh;left:0;right:0;display:flex;justify-content:center;gap:10px}
+#show .nav button{background:rgba(0,0,0,.25);color:#F6E7C8;border-color:rgba(217,191,138,.5)}
+#show .cnt{position:absolute;top:5vh;right:5vw;font-family:var(--num);font-size:clamp(18px,2vw,26px);color:#D9BF8A}
+@media print{.top .acts,.bar,#show,.checksec{display:none!important}body{background:#fff}td input,td select{border:none;background:none}}
+</style>
+
+<header class="top"><div class="in">
+  <div><a class="back" href="admin.html">← 回工作台</a><h1>抽獎排序</h1></div>
+  <div class="acts"><button id="pptBtn">下載 PPT</button><button id="printBtn">列印順序表</button><button id="showBtn" class="gold">▶ 開始播放</button></div>
+</div></header>
+
+<main>
+  <div class="kpis" id="kpis"></div>
+
+  <section class="checksec">
+    <h3>檢查<small>頒獎人重複、連續上台、還沒填的欄位</small></h3>
+    <div class="checks" id="checks"></div>
+  </section>
+
+  <section>
+    <h3>抽獎順序<small>贊助品從「報名與贊助」自動帶進來；改的內容會自動存檔，大家看得到</small></h3>
+    <div class="bar">
+      <button class="primary" id="autoBtn">依價值自動排序</button>
+      <span class="hint">由小獎排到大獎；同一位頒獎人會自動錯開。排好後可以用 ↑ ↓ 微調。</span>
+    </div>
+    <div class="tw"><table>
+      <thead><tr><th>順序</th><th>獎項／贊助單位</th><th>價值（元）</th><th>級別</th><th>頒獎人</th><th>不抽</th><th>調整</th></tr></thead>
+      <tbody id="tb"><tr><td colspan="7" class="empty">載入中…</td></tr></tbody>
+    </table></div>
+  </section>
+</main>
+
+<div id="show" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m){const d=document.createElement('div');d.className='toast';d.textContent=m;document.body.appendChild(d);setTimeout(()=>d.remove(),2600);}
+const TIERS=['普獎','參獎','貳獎','頭獎','特獎'];
+const tierFor=v=>v>=30000?'特獎':v>=10000?'頭獎':v>=5000?'貳獎':v>=2000?'參獎':'普獎';
+const norm=s=>String(s||'').replace(/\s+/g,'').replace(/(先生|小姐|老闆|董事長|總經理|經理|代表)$/,'');
+// guess a value from the gift text: "現金 6,000 元", "禮券1萬", "紅包 3000"
+function guess(t){t=String(t||'');let m=/(\d+(?:\.\d+)?)\s*萬/.exec(t);if(m)return Math.round(parseFloat(m[1])*10000);
+  const ns=(t.match(/\d[\d,]*/g)||[]).map(x=>parseInt(x.replace(/,/g,''),10)).filter(n=>n>=100);return ns.length?Math.max(...ns):null;}
+
+let GIFTS=new Map(),L={rows:{},order:[]},DB=null,loaded={g:false,l:false},saveT=null;
+function row(id){const g=GIFTS.get(id)||{};const r=L.rows[id]||{};
+  const value=r.value!=null&&r.value!==''?Number(r.value):guess(g.item);
+  return{id,g,value,guessed:!(r.value!=null&&r.value!==''),tier:r.tier||(value!=null?tierFor(value):''),presenter:r.presenter!=null?r.presenter:(g.person||''),off:!!r.off};}
+function order(){const ids=[...GIFTS.keys()];const known=L.order.filter(id=>GIFTS.has(id));const extra=ids.filter(id=>!known.includes(id));return known.concat(extra);}
+function save(){if(!DB)return;clearTimeout(saveT);saveT=setTimeout(async()=>{try{await DB.doc('flow/lottery').set(L);}catch(_){toast('存檔失敗，請檢查網路');}finally{saveT=null;}},500);}
+function active(){return order().map(row).filter(r=>!r.off);}
+
+function render(){
+  if(!loaded.g||!loaded.l)return;
+  const all=order().map(row),act=all.filter(r=>!r.off);
+  // checks
+  const cnt=new Map();act.forEach((r,i)=>{const k=norm(r.presenter);if(!k)return;if(!cnt.has(k))cnt.set(k,{name:r.presenter,at:[]});cnt.get(k).at.push(i+1);});
+  const dup=[...cnt.values()].filter(x=>x.at.length>1);
+  const consec=[];act.forEach((r,i)=>{if(i&&norm(r.presenter)&&norm(r.presenter)===norm(act[i-1].presenter))consec.push(i+1);});
+  const noVal=act.filter(r=>r.value==null),noPre=act.filter(r=>!r.presenter.trim()),notRecv=act.filter(r=>!r.g.received);
+  const flagged=new Set();dup.forEach(d=>d.at.forEach(n=>flagged.add(n)));
+  $('kpis').innerHTML=[[act.length,'要抽的獎項','gold'],[act.reduce((a,r)=>a+(r.value||0),0).toLocaleString(),'總價值（元）'],[new Set(act.map(r=>norm(r.presenter)).filter(Boolean)).size,'頒獎人數'],[dup.length,'重複的頒獎人',dup.length?'warn':'ok'],[notRecv.length,'還沒收到',notRecv.length?'warn':'ok']]
+    .map(([v,l,c])=>`<div class="kpi ${c||''}"><b>${v}</b><span>${l}</span></div>`).join('');
+  const C=[];
+  dup.forEach(d=>C.push(`<span class="w">頒獎人重複</span><span>${esc(d.name)} 上台 ${d.at.length} 次（第 ${d.at.join('、')} 個）。要改成別人，或接受同一人頒多個。</span>`));
+  if(consec.length)C.push(`<span class="w">連續上台</span><span>第 ${consec.map(n=>`${n-1}→${n}`).join('、')} 個是同一位頒獎人連續上台，可用 ↑ ↓ 調整，或換一位頒獎人。</span>`);
+  if(noVal.length)C.push(`<span class="w">缺價值</span><span>${noVal.length} 項沒有價值，排序會放在最前面：${esc(noVal.slice(0,6).map(r=>r.g.item).join('、'))}${noVal.length>6?'…':''}</span>`);
+  if(noPre.length)C.push(`<span class="w">缺頒獎人</span><span>${noPre.length} 項還沒填頒獎人。</span>`);
+  if(notRecv.length)C.push(`<span class="w">未收到</span><span>${notRecv.length} 項贊助品還沒在「報名與贊助」勾已收到。</span>`);
+  $('checks').innerHTML=(C.length?C:['<span class="g">✓ 都沒問題</span><span>頒獎人沒有重複，每項都有價值和頒獎人。</span>']).map(x=>`<div>${x}</div>`).join('');
+  // table
+  if(!all.length){$('tb').innerHTML='<tr><td colspan="7" class="empty">還沒有贊助品。先到「報名與贊助」登記贊助品，這裡就會自動出現。</td></tr>';return;}
+  let n=0,lastTier=null;
+  $('tb').innerHTML=all.map((r,ix)=>{let head='';if(!r.off){n++;if(r.tier!==lastTier){head=`<tr class="tierhead"><td colspan="7">${esc(r.tier||'未分級')}</td></tr>`;lastTier=r.tier;}}
+    return head+`<tr class="${r.off?'off':''} ${!r.off&&flagged.has(n)?'flag':''}" data-id="${r.id}">
+    <td class="no">${r.off?'—':n}</td>
+    <td><div class="it">${esc(r.g.item||'（未填品項）')}</div><div class="sm">${esc(r.g.unit||'')}${r.g.received?'':' <span class="tag warn">未收到</span>'}</div></td>
+    <td><input type="number" min="0" step="100" data-f="value" value="${r.value??''}" placeholder="填金額" aria-label="價值">${r.guessed&&r.value!=null?'<div class="sm">自動判讀</div>':''}</td>
+    <td><select data-f="tier" aria-label="級別">${['',...TIERS].map(t=>`<option ${t===r.tier?'selected':''} value="${t}">${t||'—'}</option>`).join('')}</select></td>
+    <td><input type="text" data-f="presenter" value="${esc(r.presenter)}" placeholder="誰上台頒" aria-label="頒獎人"></td>
+    <td><input type="checkbox" data-f="off" ${r.off?'checked':''} aria-label="這項不抽"></td>
+    <td><div class="mv"><button data-mv="-1" aria-label="往前" ${ix?'':'disabled'}>↑</button><button data-mv="1" aria-label="往後" ${ix<all.length-1?'':'disabled'}>↓</button></div></td></tr>`;}).join('');
+}
+
+document.addEventListener('change',e=>{const tr=e.target.closest('tr[data-id]');if(!tr)return;const id=tr.dataset.id,f=e.target.dataset.f;if(!f)return;
+  const r=L.rows[id]=L.rows[id]||{};
+  if(f==='value'){r.value=e.target.value===''?'':Number(e.target.value);if(!r.tierManual)delete r.tier;}
+  else if(f==='tier'){r.tier=e.target.value;r.tierManual=!!e.target.value;}
+  else if(f==='presenter')r.presenter=e.target.value.trim();
+  else if(f==='off')r.off=e.target.checked;
+  if(!L.order.length)L.order=order();render();save();});
+document.addEventListener('click',e=>{const b=e.target.closest('button[data-mv]');if(!b)return;const id=b.closest('tr').dataset.id;const o=order();const i=o.indexOf(id),j=i+Number(b.dataset.mv);if(j<0||j>=o.length)return;[o[i],o[j]]=[o[j],o[i]];L.order=o;render();save();});
+
+$('autoBtn').onclick=()=>{
+  const all=order().map(row);const off=all.filter(r=>r.off),act=all.filter(r=>!r.off);
+  const rank=r=>TIERS.indexOf(r.tier);
+  act.sort((a,b)=>(rank(a)-rank(b))||((a.value??-1)-(b.value??-1))||String(a.g.unit).localeCompare(String(b.g.unit),'zh-Hant'));
+  // spread the same presenter apart inside each tier
+  for(let i=1;i<act.length;i++){const p=norm(act[i].presenter);if(!p||p!==norm(act[i-1].presenter))continue;
+    for(let j=i+1;j<act.length&&act[j].tier===act[i].tier;j++){if(norm(act[j].presenter)!==p){const [x]=act.splice(j,1);act.splice(i,0,x);break;}}}
+  L.order=act.concat(off).map(r=>r.id);render();save();toast('已依價值排好，可再用 ↑ ↓ 微調');};
+
+$('printBtn').onclick=()=>window.print();
+
+// ---------- show mode ----------
+let si=0;
+function slides(){const a=active();return[{open:true,n:a.length}].concat(a.map((r,i)=>({...r,no:i+1,total:a.length})));}
+function drawShow(){const S=slides();si=Math.max(0,Math.min(si,S.length-1));const s=S[si];
+  $('show').innerHTML=`<div class="frame"></div>`+(s.open?`<div class="k">The 37th Anniversary · Lucky Draw</div><div class="item" style="margin-top:2vh">摸彩抽獎</div><div class="by">共 <b>${s.n}</b> 項好禮・感謝各界贊助</div>`
+   :`<div class="cnt">${s.no} / ${s.total}</div><div class="k">Prize No. ${s.no}</div><div class="tier">${esc(s.tier||'')}</div><div class="item">${esc(s.g.item||'')}</div>
+     <div class="by">贊助：<b>${esc(s.g.unit||'')}</b>${s.presenter?`<br>頒獎人：<b>${esc(s.presenter)}</b>`:''}</div>`)+
+   `<div class="nav"><button data-sh="-1">← 上一個</button><button data-sh="x">結束</button><button data-sh="1">下一個 →</button></div>`;}
+function openShow(){if(!active().length){toast('還沒有要抽的獎項');return;}si=0;$('show').hidden=false;drawShow();try{document.documentElement.requestFullscreen?.();}catch(_){}}
+function closeShow(){$('show').hidden=true;try{if(document.fullscreenElement)document.exitFullscreen();}catch(_){}}
+$('showBtn').onclick=openShow;
+$('show').addEventListener('click',e=>{const b=e.target.closest('button[data-sh]');if(b){if(b.dataset.sh==='x')closeShow();else{si+=Number(b.dataset.sh);drawShow();}return;}si++;drawShow();});
+document.addEventListener('keydown',e=>{if($('show').hidden)return;if(['ArrowRight','ArrowDown','PageDown',' ','Enter'].includes(e.key)){si++;drawShow();e.preventDefault();}
+  else if(['ArrowLeft','ArrowUp','PageUp','Backspace'].includes(e.key)){si--;drawShow();e.preventDefault();}else if(e.key==='Escape')closeShow();});
+
+// ---------- PPT ----------
+$('pptBtn').onclick=async()=>{const a=active();if(!a.length){toast('還沒有要抽的獎項');return;}if(!window.PptxGenJS){toast('PPT 工具載入失敗，請重新整理再試');return;}
+  const p=new PptxGenJS();p.layout='LAYOUT_WIDE';const F='Microsoft JhengHei';
+  const bg={color:'5A0E16'},gold='F4D58C',cream='F6E7C8';
+  const frame=s=>s.addShape(p.ShapeType.rect,{x:0.3,y:0.3,w:12.73,h:6.9,line:{color:'D9BF8A',width:1},fill:{type:'none'}});
+  let s=p.addSlide();s.background=bg;frame(s);
+  s.addText('摸彩抽獎',{x:0,y:2.2,w:13.33,h:1.4,align:'center',fontFace:F,fontSize:66,bold:true,color:'FFFFFF'});
+  s.addText(`共 ${a.length} 項好禮・感謝各界贊助`,{x:0,y:3.9,w:13.33,h:0.8,align:'center',fontFace:F,fontSize:28,color:cream});
+  a.forEach((r,i)=>{const s=p.addSlide();s.background=bg;frame(s);
+    s.addText(`${i+1} / ${a.length}`,{x:10.8,y:0.55,w:2,h:0.5,align:'right',fontFace:F,fontSize:16,color:'D9BF8A'});
+    s.addText(r.tier||'',{x:0,y:1.0,w:13.33,h:1.0,align:'center',fontFace:F,fontSize:48,bold:true,color:gold,charSpacing:8});
+    s.addText(r.g.item||'',{x:0.8,y:2.1,w:11.73,h:2.2,align:'center',valign:'middle',fontFace:F,fontSize:54,bold:true,color:'FFFFFF',fit:'shrink'});
+    s.addText([{text:'贊助：',options:{color:cream}},{text:r.g.unit||'',options:{color:gold,bold:true}}].concat(r.presenter?[{text:'\n頒獎人：',options:{color:cream}},{text:r.presenter,options:{color:gold,bold:true}}]:[]),
+      {x:0.8,y:4.6,w:11.73,h:1.6,align:'center',fontFace:F,fontSize:30});});
+  try{await p.writeFile({fileName:'冠成尾牙抽獎.pptx'});}catch(_){toast('下載失敗，請再試一次');}};
+
+(async()=>{const db=await claude.use('db');DB=db;
+  db.collection('gifts').onSnapshot(q=>{GIFTS=new Map(q.docs.map(d=>[d.id,{...d.data()}]));loaded.g=true;render();});
+  db.doc('flow/lottery').onSnapshot(s=>{if(saveT)return;L=s.exists?{rows:{},order:[],...s.data()}:{rows:{},order:[]};loaded.l=true;render();});
+})();
+})();
+</script>
+</body></html>
