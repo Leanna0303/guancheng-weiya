@@ -196,7 +196,7 @@ td b{font-family:var(--display)}
 <main class="wrap">
   <div class="bar">
     <div class="tabs" role="tablist" id="tabs"></div>
-    <div class="acts"><button id="bAddGift">＋ 新增贊助</button><button class="primary" id="bXlsx">匯出年度總結 Excel</button></div>
+    <div class="acts"><button id="bAddReg">＋ 手動報名</button><button id="bAddGift">＋ 新增贊助</button><button class="primary" id="bXlsx">匯出年度總結 Excel</button></div>
   </div>
   <div id="view"></div>
 </main>
@@ -208,7 +208,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const S_=v=>String(v??'').trim();
 const GROUPS=['廠商','外包師傅','協力廠商/同行','政商','教育界','廠牌高層','社團親友','柏緯朋友','員工','公益','其他貴賓','網站新報名'];
-let giftsLoaded=false,WEB=[],INV=[],GIFTS=new Map(),SP=[],SG=[],ST=[],ARR=[],CFG={},db=null,tab='web',webAt=null;
+let giftsLoaded=false,WEB=[],WEBS=[],MAN=[],INV=[],GIFTS=new Map(),SP=[],SG=[],ST=[],ARR=[],CFG={},db=null,tab='web',webAt=null;
 const H=(r,re)=>{const k=Object.keys(r).find(h=>re.test(h));return k?S_(r[k]):'';};
 const ukey=s=>String(s||'').replace(/（.*?）|\(.*?\)/g,'').replace(/股份有限公司|有限公司|股份|公司|企業社|台灣|銷售|\s/g,'').toLowerCase();
 const hash=s=>{let h=5381;for(const c of s)h=((h*33)^c.charCodeAt(0))>>>0;return h.toString(36);};
@@ -222,7 +222,7 @@ const wkey=r=>'w'+hash(H(r,/時間戳記/)||JSON.stringify(r));
 function fixedRows(){return WEB.map(r=>{const k=wkey(r),f=FIX[k];if(f&&f.hide)return null;return{...r,...((f&&f.set)||{}),__k:k,__ed:!!(f&&f.set&&Object.keys(f.set).length)};}).filter(Boolean);}
 function webRecs(){return fixedRows().map(r=>({k:r.__k,ed:r.__ed,ts:H(r,/時間戳記/),unit:H(r,/公司|單位名稱/),cat:H(r,/類別/),person:H(r,/貴姓|填表人/),title:H(r,/職稱/),attend:H(r,/是否出席/),
   count:parseInt(H(r,/總參加人數/),10)||0,names:H(r,/參加人員|名單/),veg:parseInt(H(r,/素食/),10)||0,nobeef:parseInt(H(r,/不吃牛/),10)||0,child:parseInt(H(r,/兒童椅/),10)||0,
-  sponsor:H(r,/是否.*贊助/),gifts:[H(r,/獎品[（(]?一/),H(r,/獎品[（(]?二/)].join('；').split('；').map(S_).filter(Boolean),due:H(r,/交付/),wish:H(r,/祝賀/),note:H(r,/其他需求|備註/)})).filter(r=>r.unit||r.person);}
+  sponsor:H(r,/是否.*贊助/),gifts:[H(r,/獎品[（(]?一/),H(r,/獎品[（(]?二/)].join('；').split('；').map(S_).filter(Boolean),due:H(r,/交付/),wish:H(r,/祝賀/),note:H(r,/其他需求|備註/),src:H(r,/^來源$/)})).filter(r=>r.unit||r.person);}
 const isYes=r=>!/無法|不克|否/.test(r.attend);
 function invFor(unit){const k=ukey(unit);if(k.length<2)return null;const c=INV.filter(i=>!i.merge);return c.find(i=>ukey(i.unit)===k)||c.find(i=>{const a=ukey(i.unit);return a.length>=2&&(a.includes(k)||k.includes(a));})||null;}
 // website gifts become tracked gift rows automatically
@@ -241,7 +241,7 @@ function render(){const s=stats();
 }
 function webView(s){if(!s.recs.length)return '<div class="tw"><div class="empty">網站上還沒有人報名。報名網址：leanna0303.github.io/guancheng-weiya/invite2.html</div></div>'+hidList();
   return `<div class="tw"><table><thead><tr><th>報名時間</th><th>單位</th><th>填表人</th><th>出席</th><th class="n">人數</th><th>參加名單</th><th class="n">素</th><th class="n">不吃牛</th><th class="n">兒童椅</th><th>贊助</th><th>其他需求</th><th></th></tr></thead><tbody>
-  ${[...s.recs].reverse().map(r=>`<tr><td class="mt" style="white-space:nowrap">${esc(r.ts)}</td><td><b>${esc(r.unit)}</b><div class="mt">${esc(r.cat)}</div></td><td class="sm2">${esc([r.person,r.title].filter(Boolean).join(' '))}</td>
+  ${[...s.recs].reverse().map(r=>`<tr><td class="mt" style="white-space:nowrap">${esc(r.ts)}</td><td><b>${esc(r.unit)}</b>${r.src?` <span class="pill" style="background:var(--gold-pale);color:var(--gold)">${esc(r.src)}</span>`:''}<div class="mt">${esc(r.cat)}</div></td><td class="sm2">${esc([r.person,r.title].filter(Boolean).join(' '))}</td>
    <td>${isYes(r)?'<span class="pill yes">出席</span>':'<span class="pill no">不克</span>'}</td><td class="n">${isYes(r)?r.count:''}</td><td class="sm2">${esc(r.names)}</td>
    <td class="n">${r.veg||''}</td><td class="n">${r.nobeef||''}</td><td class="n">${r.child||''}</td><td class="sm2">${esc(r.gifts.join('；'))}</td><td class="sm2">${esc(r.note)}</td><td style="white-space:nowrap">${r.ed?'<span class="pill" style="background:var(--gold-pale);color:var(--gold)">已修改</span> ':''}<button class="ghost" data-wedit="${r.k}">✏️ 編輯</button></td></tr>`).join('')}</tbody></table></div>${hidList()}`;}
 function hidList(){const h=WEB.filter(r=>FIX[wkey(r)]&&FIX[wkey(r)].hide);if(!h.length)return'';return `<p class="note" style="margin:0">已隱藏 ${h.length} 筆（不列入統計和匯出）：${h.map(r=>`${esc(H(r,/公司|單位名稱/)||H(r,/貴姓|填表人/))}（${esc(H(r,/時間戳記/))}）<button class="ghost" data-wshow="${wkey(r)}">復原</button>`).join('　')}</p>`;}
@@ -262,7 +262,7 @@ function cmpView(s){
   <div class="tw"><table><thead><tr><th>分類</th><th class="n">今年邀請</th><th class="n">已確定出席單位</th><th class="n">今年人數</th><th class="n">去年人數</th><th class="n">差異</th><th class="n">今年贊助單位</th><th class="n">去年贊助單位</th></tr></thead><tbody>
   ${rows.map(r=>`<tr><td><b>${esc(r.g)}</b></td><td class="n">${r.inv}</td><td class="n">${r.units}</td><td class="n">${r.ty}</td><td class="n">${r.ly}</td><td class="n">${d(r.ty,r.ly)}</td><td class="n">${r.tyG}</td><td class="n">${r.lyG}</td></tr>`).join('')}
   <tr><td><b>合計</b></td><td class="n"><b>${sum('inv')}</b></td><td class="n"><b>${sum('units')}</b></td><td class="n"><b>${sum('ty')}</b></td><td class="n"><b>${sum('ly')}</b></td><td class="n">${d(sum('ty'),sum('ly'))}</td><td class="n"><b>${sum('tyG')}</b></td><td class="n"><b>${sum('lyG')}</b></td></tr></tbody></table></div>`;}
-function wishView(s){const w=s.recs.filter(r=>r.wish);return w.length?`<div class="wishes">${w.map(r=>`<div class="wish">${esc(r.wish)}<small>— ${esc(r.unit)}${r.person?' '+esc(r.person):''}</small></div>`).join('')}</div>`:'<div class="tw"><div class="empty">還沒有祝賀詞。</div></div>';}
+function wishView(s){const w=s.recs.filter(r=>r.wish);return w.length?`<p class="note" style="margin:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">尾牙當天用餐時可以投影在螢幕上輪播。<button class="primary" id="wishShow">▶ 全螢幕輪播祝賀詞</button></p><div class="wishes">${w.map(r=>`<div class="wish">${esc(r.wish)}<small>— ${esc(r.unit)}${r.person?' '+esc(r.person):''}</small></div>`).join('')}</div>`:'<div class="tw"><div class="empty">還沒有祝賀詞。</div></div>';}
 
 document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
   if(b.dataset.tab){tab=b.dataset.tab;render();return;}
@@ -311,8 +311,61 @@ function editWeb(k){const raw=WEB.find(r=>wkey(r)===k);if(!raw)return;const cur=
     const before=oldGiftIds();FIX={...FIX,[k]:{...(FIX[k]||{}),set,at:Date.now()}};$('ovl').hidden=true;await after(before);saveFix(Object.keys(set).length?'已儲存修改':'沒有改到內容');};
 }
 
+// ---------- 祝賀詞輪播（投影用） ----------
+document.addEventListener('click',e=>{if(!e.target.closest('#wishShow'))return;
+  const W=webRecs().filter(r=>r.wish);if(!W.length)return;let i=0,timer=null;
+  const o=document.createElement('div');o.id='wishOv';o.style.cssText='position:fixed;inset:0;z-index:200;background:radial-gradient(120% 140% at 50% 0%,#8A1824 0%,#3A070E 80%);color:#F6E7C8;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:6vh 8vw;cursor:pointer';
+  document.body.appendChild(o);
+  const draw=()=>{const r=W[i%W.length];o.innerHTML=`<div style="position:absolute;inset:3vh 3vw;border:1px solid rgba(217,191,138,.6);border-radius:6px;pointer-events:none"></div>
+    <div style="font-family:var(--num,serif);font-style:italic;font-size:clamp(18px,2.2vw,30px);color:#D9BF8A;letter-spacing:.08em">With Best Wishes · 賓客祝福</div>
+    <div style="font-family:var(--display,serif);font-weight:700;font-size:clamp(34px,5.5vw,84px);line-height:1.4;color:#fff;margin:4vh 0;max-width:86vw">${esc(r.wish)}</div>
+    <div style="font-size:clamp(20px,2.6vw,38px)">— <b style="color:#F4D58C">${esc(r.unit)}</b>${r.person?' '+esc(r.person)+(r.title?' '+esc(r.title):''):''}</div>
+    <div style="position:absolute;bottom:4vh;font-size:14px;color:rgba(246,231,200,.6)">${i%W.length+1} / ${W.length}　・　每 8 秒自動換下一則，點一下換下一則，按 Esc 結束</div>`;};
+  const close=()=>{clearInterval(timer);o.remove();document.removeEventListener('keydown',key);try{if(document.fullscreenElement)document.exitFullscreen();}catch(_){}};
+  const key=e=>{if(e.key==='Escape')close();else if(['ArrowRight',' ','Enter'].includes(e.key)){i++;draw();}else if(e.key==='ArrowLeft'){i=(i-1+W.length)%W.length;draw();}};
+  o.onclick=()=>{i++;draw();};document.addEventListener('keydown',key);
+  draw();timer=setInterval(()=>{i++;draw();},8000);try{o.requestFullscreen&&o.requestFullscreen();}catch(_){}
+  document.addEventListener('fullscreenchange',function f(){if(!document.fullscreenElement&&document.body.contains(o)){close();document.removeEventListener('fullscreenchange',f);}});
+});
+
+// ---------- 手動報名（電話、LINE、口頭） ----------
+// stored in config/manual as rows shaped like the Google Sheet, so every page treats them like website registrations
+const MANH={unit:'公司/單位名稱',cat:'類別',person:'貴姓',title:'職稱',attend:'是否出席',count:'總參加人數',names:'參加人員名單',veg:'素食人數',nobeef:'不吃牛人數',child:'兒童椅',gifts:'贊助獎品（一）',due:'贊助品交付日',note:'其他需求',wish:'祝賀詞'};
+const CATS=['廠商','同行','學校／教育界','社團','政府機關／民代','貴賓','親友','朋友','其他'];
+$('bAddReg').onclick=()=>{
+  $('dlg').innerHTML=`<h3>手動報名</h3><p class="note" style="margin:-4px 0 0">電話、LINE 或當面口頭報名的，填在這裡就跟網站報名一樣算進統計、名冊同步與匯出。</p>
+   <div style="display:flex;flex-direction:column;gap:8px;max-height:min(62vh,580px);overflow:auto;padding-right:4px">
+   <div class="f"><label for="m_unit">單位（必填）</label><input id="m_unit" placeholder="例如：聲寶、和美鎮公所"></div>
+   <div class="f"><label for="m_cat">類別</label><select id="m_cat">${CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>
+   <div class="f"><label for="m_person">聯絡人</label><input id="m_person" placeholder="例如：王志強"></div>
+   <div class="f"><label for="m_title">職稱</label><input id="m_title"></div>
+   <div class="f"><label for="m_attend">是否出席</label><select id="m_attend"><option>出席</option><option>無法出席</option></select></div>
+   <div class="f"><label for="m_count">出席人數</label><input id="m_count" inputmode="numeric" placeholder="例如：2"></div>
+   <div class="f"><label for="m_names">參加名單</label><textarea id="m_names" rows="2" style="width:100%;font:inherit" placeholder="用逗號分開，吃素的在名字後面加（素）"></textarea></div>
+   <div class="f"><label for="m_veg">素食人數</label><input id="m_veg" inputmode="numeric"></div>
+   <div class="f"><label for="m_nobeef">不吃牛人數</label><input id="m_nobeef" inputmode="numeric"></div>
+   <div class="f"><label for="m_child">兒童椅</label><input id="m_child" inputmode="numeric"></div>
+   <div class="f"><label for="m_gifts">贊助品</label><input id="m_gifts" placeholder="多項用；分開，例如：現金 6000；電鍋一台"></div>
+   <div class="f"><label for="m_due">贊助品交付日</label><input id="m_due" type="date"></div>
+   <div class="f"><label for="m_note">其他需求</label><textarea id="m_note" rows="2" style="width:100%;font:inherit"></textarea></div>
+   <div class="f"><label for="m_wish">祝賀詞</label><textarea id="m_wish" rows="2" style="width:100%;font:inherit"></textarea></div>
+   <div class="f"><label for="m_src">報名方式</label><select id="m_src"><option>口頭</option><option>電話</option><option>LINE</option><option>其他</option></select></div>
+   </div>
+   <div class="acts"><button id="m_c">取消</button><button class="primary" id="m_ok">新增報名</button></div>`;
+  $('ovl').hidden=false;$('m_unit').focus();
+  $('m_c').onclick=()=>$('ovl').hidden=true;
+  $('m_ok').onclick=async()=>{const unit=S_($('m_unit').value);if(!unit){toast('請填單位');$('m_unit').focus();return;}
+    const d=new Date();const p=n=>String(n).padStart(2,'0');
+    const row={'時間戳記':`${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}（${$('m_src').value}）`,'來源':$('m_src').value};
+    Object.entries(MANH).forEach(([f,h])=>{row[h]=S_($('m_'+f).value);});
+    if(!row['總參加人數']&&row['是否出席']==='出席'){const n=row['參加人員名單'].split(/[，,、\n]/).map(S_).filter(Boolean).length;if(n)row['總參加人數']=String(n);}
+    const btn=$('m_ok');btn.disabled=true;
+    try{MAN=MAN.concat([row]);WEB=WEBS.concat(MAN);await db.doc('config/manual').set({list:MAN});$('ovl').hidden=true;tab='web';render();await syncWebGifts();render();toast('已新增報名');}
+    catch(_){btn.disabled=false;toast('儲存失敗，請檢查網路');}};
+};
+
 // ---------- 年度總結 Excel ----------
-const READY=new Set();const need=['invites','gifts','sp','sg','st','arrive','config','web','fix'];
+const READY=new Set();const need=['invites','gifts','sp','sg','st','arrive','config','web','fix','manual'];
 const allReady=()=>need.every(k=>READY.has(k));
 $('bXlsx').onclick=async()=>{if(typeof ExcelJS==='undefined'){toast('Excel 元件載入失敗，請重新整理');return;}
   // wait until every list has loaded, otherwise the file comes out empty
@@ -370,9 +423,10 @@ render();
   db.collection('sg').onSnapshot(q=>{READY.add('sg');SG=q.docs.map(d=>({...d.data(),id:d.id}));});
   db.collection('st').onSnapshot(q=>{READY.add('st');ST=q.docs.map(d=>({...d.data(),id:d.id}));});
   db.collection('arrive').onSnapshot(q=>{READY.add('arrive');ARR=q.docs.map(d=>({...d.data(),id:d.id}));});
+  db.doc('config/manual').onSnapshot(s=>{MAN=(s.exists&&s.data().list)||[];WEB=WEBS.concat(MAN);READY.add('manual');render();});
   db.doc('config/webfix').onSnapshot(s=>{FIX=(s.exists&&s.data().fix)||{};READY.add('fix');render();});
   db.doc('config/event').onSnapshot(s=>{READY.add('config');CFG=s.exists?s.data():{};});
-  const loadWeb=async()=>{try{const j=await window.__kcCall({op:'web'});WEB=j.rows||[];READY.add('web');webAt=new Date();render();await new Promise(r=>setTimeout(r,1500));await syncWebGifts();render();}catch(_){READY.add('web');toast('讀不到網站報名資料，稍後會再試');}};
+  const loadWeb=async()=>{try{const j=await window.__kcCall({op:'web'});WEBS=j.rows||[];WEB=WEBS.concat(MAN);READY.add('web');webAt=new Date();render();await new Promise(r=>setTimeout(r,1500));await syncWebGifts();render();}catch(_){READY.add('web');toast('讀不到網站報名資料，稍後會再試');}};
   await loadWeb();setInterval(loadWeb,60000);
 })();
 })();

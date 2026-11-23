@@ -817,7 +817,8 @@ $('bBoss').onclick=()=>{bossOpen=true;$('boss').hidden=false;renderBoss();};
 $('bAdd').onclick=()=>editDlg(null);
 $('bPrintA').onclick=printDlg;
 $('bSet').onclick=setDlg;
-async function webRows(){const j=await window.__kcCall({op:'web'});const rows=j.rows||[];
+async function webRows(){const j=await window.__kcCall({op:'web'});let rows=j.rows||[];
+  try{const m=await (await claude.use('db')).doc('config/manual').get();if(m.exists&&m.data().list)rows=rows.concat(m.data().list);}catch(_){}
   // apply corrections made on the 報名與贊助 page (config/webfix)
   let FX={};try{const d=await (await claude.use('db')).doc('config/webfix').get();FX=(d.exists&&d.data().fix)||{};}catch(_){}
   const hs=s=>{let h=5381;for(const c of s)h=((h*33)^c.charCodeAt(0))>>>0;return h.toString(36);};

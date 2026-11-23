@@ -300,7 +300,9 @@ h3 small{font-family:var(--body);font-weight:500;font-size:14px;color:var(--mute
   </section>
 
   <section class="reset">
-    <h3>測試資料<small>正式開始前，把測試時填的報名、贊助、座位一次清掉</small></h3>
+    <h3>資料管理<small>備份全部資料；正式開始前把測試資料一次清掉</small></h3>
+    <div class="site" style="margin-bottom:10px"><div><b>備份全部資料</b><div class="d" style="font-size:14.5px;color:var(--muted)">下載一個檔案，包含名冊、報名、贊助、座位、抽獎、紙本卡、流程表。建議每週按一次，或大改之前先按。</div></div>
+      <div class="acts"><button id="backupBtn">⬇️ 下載備份</button></div></div>
     <div class="site"><div><b>清除測試資料</b><div class="d" style="font-size:14.5px;color:var(--muted)">會先讓你勾選要清哪些，再確認一次；清除前會自動下載一份備份檔。</div></div>
       <div class="acts"><button id="resetBtn" class="danger">🧹 清除測試資料</button></div></div>
   </section>
@@ -439,6 +441,17 @@ function fixFlow(){if(flowFixed||!FLOW||!DB||EDIT)return;flowFixed=true;
   if(JSON.stringify(F)!==JSON.stringify(FLOW)){FLOW=F;DB.doc('flow/main').set(F).catch(()=>{flowFixed=false;});}}
 document.addEventListener('change',async e=>{const k=e.target.dataset.ck;if(!k||!DB)return;CHK={...CHK,[k]:e.target.checked};renderFlow();try{await DB.doc('check/flow').set(CHK);}catch(_){toast('儲存失敗');}});
 render();renderFlow();
+// ---------- 備份全部資料 ----------
+$('backupBtn').onclick=async()=>{if(!DB){toast('資料還在載入');return;}const b=$('backupBtn');b.disabled=true;b.textContent='備份中…';
+  try{const col=async c=>(await DB.collection(c).get()).docs.map(d=>({id:d.id,data:d.data()}));
+    const doc=async k=>{const d=await DB.doc(k).get();return d.exists?d.data():null;};
+    const out={at:new Date().toISOString(),collections:{},docs:{}};
+    for(const c of ['invites','gifts','sp','sg','st','arrive'])out.collections[c]=await col(c);
+    for(const k of ['config/event','config/webfix','config/manual','flow/main','flow/lottery','flow/cards','check/flow','check/day','meta/main'])out.docs[k]=await doc(k);
+    try{out.web=(await window.__kcCall({op:'web'})).rows||[];}catch(_){}
+    const dl=await claude.use('downloads');await dl.save({filename:'冠成尾牙_全部資料備份_'+new Date().toLocaleDateString('sv-SE')+'.json',data:JSON.stringify(out,null,1)});toast('備份已下載');}
+  catch(_){toast('備份失敗，請再試一次');}finally{b.disabled=false;b.textContent='⬇️ 下載備份';}};
+
 // ---------- 清除測試資料 ----------
 $('resetBtn').onclick=async()=>{if(!DB){toast('資料還在載入');return;}const b=$('resetBtn');b.disabled=true;b.textContent='計算中…';
   try{
@@ -447,13 +460,14 @@ $('resetBtn').onclick=async()=>{if(!DB){toast('資料還在載入');return;}cons
   const [inv,gifts,sp,sg,st,arr]=await Promise.all(['invites','gifts','sp','sg','st','arrive'].map(col));
   const [fix,lot,chk,cards,meta,seatOld]=await Promise.all(['config/webfix','flow/lottery','check/flow','flow/cards','meta/main','seating/state'].map(doc));
   let web=[];try{web=(await window.__kcCall({op:'web'})).rows||[];}catch(_){}
+  try{const m=await DB.doc('config/manual').get();if(m.exists&&m.data().list)web=web.concat(m.data().list);}catch(_){}
   const hs=s=>{let h=5381;for(const c of s)h=((h*33)^c.charCodeAt(0))>>>0;return h.toString(36);};
   const ts=r=>{const k=Object.keys(r).find(h=>/時間戳記/.test(h));return k?String(r[k]??'').trim():'';};
   const FX=(fix&&fix.fix)||{};const webKeys=web.map(r=>'w'+hs(ts(r)||JSON.stringify(r)));const webLive=webKeys.filter(k=>!(FX[k]&&FX[k].hide));
   const invNew=inv.filter(d=>d.data.src==='網站新報名'||d.data.group==='網站新報名');const invRep=inv.filter(d=>!invNew.includes(d)&&(d.data.reply||d.data.count||d.data.names||d.data.webGift));
   const sentCards=cards&&cards.list?cards.list.filter(x=>x.sent).length:0;const ticks=chk?Object.values(chk).filter(Boolean).length:0;
   const O=[
-    {k:'web',on:true,t:`網站報名 ${webLive.length} 筆`,d:'全部隱藏，不列入統計與匯出。Google 試算表原始紀錄不動，之後也能在「報名與贊助」逐筆復原。',n:webLive.length},
+    {k:'web',on:true,t:`網站報名與手動報名 ${webLive.length} 筆`,d:'全部隱藏，不列入統計與匯出。Google 試算表原始紀錄不動，之後也能在「報名與贊助」逐筆復原。',n:webLive.length},
     {k:'gifts',on:true,t:`贊助品 ${gifts.length} 筆`,d:'報名與贊助頁的贊助品清單（含已收到的勾選）。',n:gifts.length},
     {k:'seat',on:true,t:`座位系統：名單 ${sp.length} 人、${st.length} 桌、報到 ${arr.length} 筆`,d:'清空座位名單、桌次與報到紀錄，回到空白場地圖。',n:sp.length+sg.length+st.length+arr.length},
     {k:'lot',on:true,t:'抽獎排序',d:'抽獎順序、價值、頒獎人的設定。',n:lot?1:0},
@@ -472,7 +486,8 @@ $('resetBtn').onclick=async()=>{if(!DB){toast('資料還在載入');return;}cons
     $('rBack').onclick=step1;$('rC2').onclick=close;$('rGo').onclick=()=>run(pick);};
   const run=async pick=>{const P=new Set(pick.map(o=>o.k));const g=$('rGo');g.disabled=true;g.textContent='清除中…';
     try{
-      const backup={at:new Date().toISOString(),invites:inv,gifts,sp,sg,st,arrive:arr,webfix:fix,lottery:lot,check:chk,cards,meta,seatingState:seatOld};
+      let manual=null;try{const m=await DB.doc('config/manual').get();manual=m.exists?m.data():null;}catch(_){}
+      const backup={at:new Date().toISOString(),manual,web,invites:inv,gifts,sp,sg,st,arrive:arr,webfix:fix,lottery:lot,check:chk,cards,meta,seatingState:seatOld};
       const dl=await claude.use('downloads');await dl.save({filename:'冠成尾牙_清除前備份_'+new Date().toLocaleDateString('sv-SE')+'.json',data:JSON.stringify(backup,null,1)});
       const W=[];
       if(P.has('web')){const nf={...FX};webKeys.forEach(k=>{nf[k]={...(nf[k]||{}),hide:true,at:Date.now(),by:'清除測試資料'};});W.push(DB.doc('config/webfix').set({fix:nf}));}
@@ -502,7 +517,8 @@ $('copy').onclick=async()=>{try{await navigator.clipboard.writeText('https://lea
   db.collection('arrive').onSnapshot(q=>{ARR=q.docs.map(d=>d.data());render();});
   db.collection('gifts').onSnapshot(q=>{GIFT=q.docs.map(d=>d.data());render();});
   db.doc('config/event').onSnapshot(s=>{CFG=s.exists?s.data():{};render();renderFlow();});
-  try{const j=await window.__kcCall({op:'web'});const rows=j.rows||[];
+  try{const j=await window.__kcCall({op:'web'});let rows=j.rows||[];
+    try{const m=await db.doc('config/manual').get();if(m.exists&&m.data().list)rows=rows.concat(m.data().list);}catch(_){}
     let FX={};try{const d=await db.doc('config/webfix').get();FX=(d.exists&&d.data().fix)||{};}catch(_){}
     const hs=s=>{let h=5381;for(const c of s)h=((h*33)^c.charCodeAt(0))>>>0;return h.toString(36);};
     const ts=r=>{const k=Object.keys(r).find(h=>/時間戳記/.test(h));return k?String(r[k]??'').trim():'';};
