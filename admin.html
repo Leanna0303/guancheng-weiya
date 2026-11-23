@@ -402,11 +402,13 @@ function fixFlow(){if(flowFixed||!FLOW||!DB||EDIT)return;flowFixed=true;
     if(/抽獎/.test(it.t)){if(/Claude/.test(it.tip||''))it.tip=LOTTIP;}
     else if(it.tip===LOTTIP){ // an earlier fix overwrote this item's own tip by mistake: put a fitting one back
       it.tip=/現任/.test(it.t)?'可請 Claude 上網逐一查核':/總結|去年資料|歸檔/.test(it.t)?'報名與贊助 →「匯出年度總結」，明年交給 Claude 當「去年資料」':'';}}));
+  // pickup from 大中華 is 80 cards (58 on the list + spares)
+  F.stages.forEach(st=>st.items.forEach(it=>{if(/大中華/.test(it.t)&&/卡/.test(it.t)&&/50\s*份/.test(it.t)){it.t=it.t.replace(/50\s*份/,'80 份');it.tip='紙本卡名單目前 58 張（工作台「紙本邀請卡」），80 份含備用';}}));
   // new task: pick up the printed invitation cards from 大中華
   if(!F.stages.some(st=>st.items.some(it=>/大中華/.test(it.t)&&/卡/.test(it.t)))){
     const st=F.stages.find(st=>st.items.some(it=>/發送邀請/.test(it.t)))||F.stages.find(st=>/邀請/.test(st.name));
     if(st){const k=st.items.findIndex(it=>/發送邀請/.test(it.t));
-      st.items.splice(k<0?st.items.length:k,0,{id:'i'+Math.random().toString(36).slice(2,9),t:'請人員去大中華領紙本邀請卡 50 份，並先通知大中華我們哪一天、幾點會去領',who:'承辦',tip:'紙本卡名單目前 58 張（工作台「紙本邀請卡」），數量不夠請多領幾份備用'});}}
+      st.items.splice(k<0?st.items.length:k,0,{id:'i'+Math.random().toString(36).slice(2,9),t:'請人員去大中華領紙本邀請卡 80 份，並先通知大中華我們哪一天、幾點會去領',who:'承辦',tip:'紙本卡名單目前 58 張（工作台「紙本邀請卡」），80 份含備用'});}}
   F.day=(F.day||[]).map(fixName);(F.notes||[]).forEach(n=>{n.l=(n.l||[]).map(fixName);});
   if(JSON.stringify(F)!==JSON.stringify(FLOW)){FLOW=F;DB.doc('flow/main').set(F).catch(()=>{flowFixed=false;});}}
 document.addEventListener('change',async e=>{const k=e.target.dataset.ck;if(!k||!DB)return;CHK={...CHK,[k]:e.target.checked};renderFlow();try{await DB.doc('check/flow').set(CHK);}catch(_){toast('儲存失敗');}});
