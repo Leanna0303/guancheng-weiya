@@ -172,6 +172,11 @@ th:nth-child(2){min-width:150px}th:nth-child(3){min-width:190px}th:nth-child(7){
 td.sc{white-space:nowrap}
 td .d{font-size:12.5px;color:var(--ok)}
 tr.sent td{background:color-mix(in srgb,var(--ok-pale) 55%,transparent)}
+.dec{font-weight:700;width:92px!important;border:1px solid var(--hair)!important}
+.dec.d-yes{background:var(--ok-pale)!important;color:var(--ok)!important;border-color:var(--ok)!important}
+.dec.d-no{background:var(--sunk)!important;color:var(--muted)!important}
+.dec.d-wait{background:var(--warn-pale)!important;color:var(--warn)!important;border-color:var(--warn)!important}
+tr.off td:not(:nth-child(2)){opacity:.45}
 .del{white-space:nowrap;min-height:38px;padding:2px 10px;font-size:13px;color:var(--warn);border-color:transparent;background:transparent}
 .toast{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:9px 18px;border-radius:999px;font-size:15px;z-index:120}
 .empty{padding:30px;text-align:center;color:var(--muted)}
@@ -179,7 +184,7 @@ tr.sent td{background:color-mix(in srgb,var(--ok-pale) 55%,transparent)}
 
 <header class="top"><div class="in">
   <div><a class="back" href="admin.html">← 回工作台</a><h1>紙本邀請卡</h1></div>
-  <div class="acts"><button id="pList">列印寄送清單</button><button id="pLabel" class="gold">列印信封標籤</button></div>
+  <div class="acts"><button id="pTalk">列印討論清單</button><button id="pList">列印寄送清單</button><button id="pLabel" class="gold">列印信封標籤</button></div>
 </div></header>
 
 <main>
@@ -190,8 +195,8 @@ tr.sent td{background:color-mix(in srgb,var(--ok-pale) 55%,transparent)}
     <h3>名單<small>政商、教育界、各廠牌高層（只邀請、不贊助）。直接在表格裡改，會自動存檔，大家看得到。</small></h3>
     <div class="tabs" id="tabs"></div>
     <div class="tw"><table>
-      <thead><tr><th>#</th><th>單位</th><th>收件人</th><th>寄送方式</th><th>地址／轉交給誰</th><th>去年人數</th><th>備註</th><th>已寄出</th><th></th></tr></thead>
-      <tbody id="tb"><tr><td colspan="9" class="empty">載入中…</td></tr></tbody>
+      <thead><tr><th>#</th><th>今年</th><th>單位</th><th>收件人</th><th>寄送方式</th><th>地址／轉交給誰</th><th>去年人數</th><th>備註</th><th>已寄出</th><th></th></tr></thead>
+      <tbody id="tb"><tr><td colspan="10" class="empty">載入中…</td></tr></tbody>
     </table></div>
     <div style="margin-top:10px"><button id="addBtn">＋ 新增一筆</button></div>
   </section>
@@ -206,18 +211,21 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 function toast(m){const d=document.createElement('div');d.className='toast';d.textContent=m;document.body.appendChild(d);setTimeout(()=>d.remove(),2600);}
 let C=null,DB=null,tab='all',saveT=null;
 function save(){if(!DB)return;clearTimeout(saveT);saveT=setTimeout(async()=>{try{await DB.doc('flow/cards').set(C);}catch(_){toast('存檔失敗，請檢查網路');}finally{saveT=null;}},400);}
-function render(){if(!C)return;const L=C.list;
+// 今年是否邀請：'' 待討論、'邀請'、'不邀'；張數、標籤、寄送清單都不算「不邀」
+const dec=x=>x.decide||'';const live=x=>dec(x)!=='不邀';
+function render(){if(!C)return;const ALL=C.list,L=ALL.filter(live);
   const sent=L.filter(x=>x.sent).length,ly=L.reduce((a,x)=>a+(Number(x.ly)||0),0);
-  const by=h=>L.filter(x=>x.how===h).length;
-  $('kpis').innerHTML=[[L.length,'紙本卡張數','gold'],[L.length-sent,'還沒寄出',L.length-sent?'warn':'ok'],[sent,'已寄出','ok'],[by('郵寄'),'郵寄'],[by('轉交')+by('給本人'),'轉交／給本人'],[by('親送'),'親送'],[ly,'去年出席人數']]
+  const by=h=>L.filter(x=>x.how===h).length;const nW=ALL.filter(x=>!dec(x)).length,nY=ALL.filter(x=>dec(x)==='邀請').length,nN=ALL.filter(x=>dec(x)==='不邀').length;
+  $('kpis').innerHTML=[[nW,'待討論',nW?'warn':'ok'],[nY,'確定邀請','ok'],[nN,'不邀'],[L.length,'紙本卡張數','gold'],[L.length-sent,'還沒寄出',L.length-sent?'warn':'ok'],[sent,'已寄出','ok'],[by('郵寄'),'郵寄'],[ly,'去年出席人數']]
     .map(([v,l,c])=>`<div class="kpi ${c||''}"><b>${v}</b><span>${l}</span></div>`).join('');
   const nMail=by('郵寄');
-  $('need').innerHTML=`共需 <b>${L.length}</b> 張紙本邀請卡（郵寄 ${nMail} 張需要信封標籤）。到大中華領 <b>80</b> 份，寄完還有 <b>${80-L.length}</b> 份備用。`;
-  $('tabs').innerHTML=[['all','全部 '+L.length]].concat(GR.map(g=>[g,g+' '+L.filter(x=>x.group===g).length])).map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${esc(l)}</button>`).join('');
+  $('need').innerHTML=(nW?`還有 <b>${nW}</b> 筆待討論，可以按「列印討論清單」帶去跟老闆勾選。`:'')+`扣掉不邀的，共需 <b>${L.length}</b> 張紙本邀請卡（郵寄 ${nMail} 張需要信封標籤）。到大中華領 <b>80</b> 份，寄完還有 <b>${80-L.length}</b> 份備用。`;
+  $('tabs').innerHTML=[['all','全部 '+ALL.length],['wait','待討論 '+nW]].concat(GR.map(g=>[g,g+' '+ALL.filter(x=>x.group===g).length])).map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${esc(l)}</button>`).join('');
   let n=0;
-  $('tb').innerHTML=GR.filter(g=>tab==='all'||tab===g).map(g=>{const its=L.filter(x=>x.group===g);if(!its.length)return'';
-    return `<tr class="grp"><td colspan="9">${g}　<span style="font-family:var(--body);font-size:14px;color:var(--muted);font-weight:500">${its.length} 張</span></td></tr>`+its.map(x=>{n++;return `<tr data-id="${x.id}" class="${x.sent?'sent':''}">
+  $('tb').innerHTML=GR.filter(g=>tab==='all'||tab==='wait'||tab===g).map(g=>{const its=ALL.filter(x=>x.group===g&&(tab!=='wait'||!dec(x)));if(!its.length)return'';
+    return `<tr class="grp"><td colspan="10">${g}　<span style="font-family:var(--body);font-size:14px;color:var(--muted);font-weight:500">${its.length} 張</span></td></tr>`+its.map(x=>{n++;const d=dec(x);return `<tr data-id="${x.id}" class="${x.sent?'sent':''} ${d==='不邀'?'off':''}">
       <td class="no">${n}</td>
+      <td><select data-f="decide" class="dec ${d==='邀請'?'d-yes':d==='不邀'?'d-no':'d-wait'}" aria-label="今年是否邀請"><option value="" ${!d?'selected':''}>待討論</option><option ${d==='邀請'?'selected':''}>邀請</option><option ${d==='不邀'?'selected':''}>不邀</option></select></td>
       <td class="u"><textarea rows="1" data-f="unit" aria-label="單位">${esc(x.unit)}</textarea></td>
       <td><textarea rows="1" data-f="person" aria-label="收件人">${esc(x.person)}</textarea></td>
       <td><select data-f="how" aria-label="寄送方式">${HOW.map(h=>`<option ${h===x.how?'selected':''}>${h}</option>`).join('')}</select></td>
@@ -225,7 +233,7 @@ function render(){if(!C)return;const L=C.list;
       <td><input type="number" min="0" data-f="ly" value="${esc(x.ly)}" aria-label="去年人數"></td>
       <td><textarea rows="1" data-f="note" aria-label="備註">${esc(x.note)}</textarea></td>
       <td class="sc"><input type="checkbox" data-f="sent" ${x.sent?'checked':''} aria-label="已寄出">${x.sentAt?`<div class="d">${esc(x.sentAt)}</div>`:''}</td>
-      <td><button class="del" data-del="${x.id}">刪除</button></td></tr>`;}).join('');}).join('')||'<tr><td colspan="9" class="empty">沒有資料</td></tr>';
+      <td><button class="del" data-del="${x.id}">刪除</button></td></tr>`;}).join('');}).join('')||'<tr><td colspan="10" class="empty">沒有資料</td></tr>';
   growAll();
 }
 const grow=a=>{a.style.height='auto';a.style.height=a.scrollHeight+'px';};
@@ -250,17 +258,29 @@ function openPrint(title,body,css){const w=window.open('','_blank');if(!w){toast
   w.document.write(`<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>${title}</title><style>*{box-sizing:border-box}body{margin:0;font-family:"Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;color:#1d1714;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .bar{position:sticky;top:0;background:#7A1520;color:#fff;padding:10px 16px;display:flex;gap:14px;align-items:center;font-size:14px;z-index:5}.bar button{font:inherit;font-weight:700;padding:6px 20px;border:none;border-radius:999px;background:#fff;color:#7A1520;cursor:pointer}
   @media print{.bar{display:none}}${css}</style></head><body>${body}</body></html>`);w.document.close();}
-$('pList').onclick=()=>{if(!C)return;let n=0;const date=new Date().toLocaleDateString('zh-TW');
-  const body=`<div class="bar"><span>紙本邀請卡寄送清單（${C.list.length} 張）</span><button onclick="print()">列印</button><span style="opacity:.85;font-size:12.5px">A4 直向</span></div><main>
-  <h1>冠成家電尾牙　紙本邀請卡寄送清單</h1><div class="r">共 ${C.list.length} 張・列印日期：${date}</div>
-  ${GR.map(g=>{const its=C.list.filter(x=>x.group===g);if(!its.length)return'';return `<h2>${g}<span>${its.length} 張</span></h2><table><thead><tr><th class="no">#</th><th>單位／收件人</th><th class="h">方式</th><th>地址／轉交</th><th class="c">去年<br>人數</th><th>備註</th><th class="c">已寄</th></tr></thead><tbody>${its.map(x=>{n++;return `<tr><td class="no">${n}</td><td><b>${esc(x.unit)}</b> ${esc(x.person)}</td><td class="h">${esc(x.how)}</td><td>${esc(x.addr)}</td><td class="c">${x.ly===''||x.ly==null?'—':esc(x.ly)}</td><td>${esc(x.note)}</td><td class="c">${x.sent?'☑':'☐'}</td></tr>`;}).join('')}</tbody></table>`;}).join('')}</main>`;
+$('pTalk').onclick=()=>{if(!C)return;let n=0;const date=new Date().toLocaleDateString('zh-TW');const box=v=>v?'☑':'☐';
+  const body=`<div class="bar"><span>紙本邀請卡　今年邀請討論清單（${C.list.length} 筆）</span><button onclick="print()">列印</button><span style="opacity:.85;font-size:12.5px">A4 直向</span></div><main>
+  <h1>冠成家電尾牙　紙本邀請卡　今年邀請討論清單</h1><div class="r">政商、教育界、廠牌高層共 ${C.list.length} 筆・已勾的是目前的決定・列印日期：${date}</div>
+  ${GR.map(g=>{const its=C.list.filter(x=>x.group===g);if(!its.length)return'';return `<h2>${g}<span>${its.length} 筆</span></h2><table><thead><tr><th class="no">#</th><th>單位</th><th>收件人</th><th class="c">去年<br>人數</th><th>備註</th><th class="c">邀請</th><th class="c">不邀</th></tr></thead><tbody>${its.map(x=>{n++;const d=dec(x);return `<tr><td class="no">${n}</td><td><b>${esc(x.unit)}</b></td><td>${esc(x.person)}</td><td class="c">${x.ly===''||x.ly==null?'—':esc(x.ly)}</td><td>${esc(x.note)}</td><td class="c b">${box(d==='邀請')}</td><td class="c b">${box(d==='不邀')}</td></tr>`;}).join('')}</tbody></table>`;}).join('')}</main>`;
+  openPrint('紙本邀請卡討論清單',body,`@page{size:A4 portrait;margin:10mm}@media screen{body{background:#e9e4dc}main{background:#fff;max-width:210mm;margin:14px auto;padding:10mm}}
+  h1{font-size:17pt;color:#7A1520;letter-spacing:.08em;margin:0}.r{color:#5C514A;font-size:10.5pt;margin:1mm 0 3mm;border-bottom:2pt double #A8843F;padding-bottom:2mm}
+  h2{font-size:13pt;color:#7A1520;margin:4mm 0 1.5mm;break-after:avoid}h2 span{font-size:10pt;color:#8C7F74;margin-left:3mm;font-weight:500}
+  table{width:100%;border-collapse:collapse;font-size:10.5pt;table-layout:fixed}thead{display:table-header-group}tr{break-inside:avoid}
+  th{background:#F4E7CB;color:#4E0B13;text-align:left;padding:1.2mm 1.6mm;border:.5pt solid #D9BF8A;font-size:9.5pt}td{border:.5pt solid #DCCFBE;padding:1.6mm 1.6mm;vertical-align:top;overflow-wrap:anywhere}
+  .no{width:8mm;text-align:center;color:#8C7F74}.c{width:12mm;text-align:center}.b{font-size:15pt;line-height:1}th:nth-child(2){width:44mm}th:nth-child(3){width:50mm}`);};
+$('pList').onclick=()=>{if(!C)return;let n=0;const LL=C.list.filter(live);const date=new Date().toLocaleDateString('zh-TW');
+  const body=`<div class="bar"><span>紙本邀請卡寄送清單（${LL.length} 張）</span><button onclick="print()">列印</button><span style="opacity:.85;font-size:12.5px">A4 直向</span></div><main>
+  <h1>冠成家電尾牙　紙本邀請卡寄送清單</h1><div class="r">共 ${LL.length} 張（不含不邀）・列印日期：${date}</div>
+  ${GR.map(g=>{const its=LL.filter(x=>x.group===g);if(!its.length)return'';return `<h2>${g}<span>${its.length} 張</span></h2><table><thead><tr><th class="no">#</th><th>單位／收件人</th><th class="h">方式</th><th>地址／轉交</th><th class="c">去年<br>人數</th><th>備註</th><th class="c">已寄</th></tr></thead><tbody>${its.map(x=>{n++;return `<tr><td class="no">${n}</td><td><b>${esc(x.unit)}</b> ${esc(x.person)}</td><td class="h">${esc(x.how)}</td><td>${esc(x.addr)}</td><td class="c">${x.ly===''||x.ly==null?'—':esc(x.ly)}</td><td>${esc(x.note)}</td><td class="c">${x.sent?'☑':'☐'}</td></tr>`;}).join('')}</tbody></table>`;}).join('')}</main>`;
   openPrint('紙本邀請卡寄送清單',body,`@page{size:A4 portrait;margin:10mm}@media screen{body{background:#e9e4dc}main{background:#fff;max-width:210mm;margin:14px auto;padding:10mm}}
   h1{font-size:18pt;color:#7A1520;letter-spacing:.1em;margin:0}.r{color:#5C514A;font-size:10.5pt;margin:1mm 0 3mm;border-bottom:2pt double #A8843F;padding-bottom:2mm}
   h2{font-size:13pt;color:#7A1520;margin:4mm 0 1.5mm;break-after:avoid}h2 span{font-size:10pt;color:#8C7F74;margin-left:3mm;font-weight:500}
   table{width:100%;border-collapse:collapse;font-size:10pt;table-layout:fixed}thead{display:table-header-group}tr{break-inside:avoid}
   th{background:#F4E7CB;color:#4E0B13;text-align:left;padding:1mm 1.4mm;border:.5pt solid #D9BF8A;font-size:9.5pt}td{border:.5pt solid #DCCFBE;padding:1mm 1.4mm;vertical-align:top;overflow-wrap:anywhere}
   .no{width:8mm;text-align:center;color:#8C7F74}.h{width:13mm}.c{width:11mm;text-align:center}th:nth-child(2){width:58mm}th:nth-child(4){width:52mm}`);};
-$('pLabel').onclick=()=>{if(!C)return;const L=C.list.filter(x=>x.how==='郵寄'&&x.addr);if(!L.length){toast('沒有要郵寄的名單');return;}
+let confirmLab=false;
+$('pLabel').onclick=()=>{if(!C)return;const L=C.list.filter(x=>live(x)&&x.how==='郵寄'&&x.addr);if(!L.length){toast('沒有要郵寄的名單');return;}
+  const nw=L.filter(x=>!dec(x)).length;if(nw&&!confirmLab){confirmLab=true;toast(`還有 ${nw} 張待討論的也會印出；確定要印再按一次`);setTimeout(()=>confirmLab=false,6000);return;}confirmLab=false;
   // same layout as the office's Word label template: «地址» / «單位» / «姓名» 先生/小姐 收 印刷品
   const titled=p=>/(長|理|委|代表|議員|任|監事|幹事|董事|總|師|官|員|人|主委)$/.test(p.replace(/暨全體同仁$/,''));
   const lab=x=>{const who=x.person||x.unit;const unit=x.person?x.unit:'';
