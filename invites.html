@@ -232,6 +232,13 @@ textarea{width:100%;min-height:90px;resize:vertical}
 /* table view */
 .tw{overflow-x:auto;background:var(--sheet);border:1px solid var(--hair);border-radius:14px}
 table.lg{width:100%;border-collapse:collapse;font-size:15.9px;min-width:980px}
+/* wide screens: group title and column headers stay on top while scrolling down a long group */
+@media (min-width:1040px){
+  #list .tw{overflow:visible}
+  #list .grp>h2{position:sticky;top:0;z-index:4;background:var(--paper);margin:0;padding:8px 0}
+  #list .lg th{top:44px;z-index:3;box-shadow:0 1px 0 var(--gold-line)}
+  #list .lg thead th:first-child{border-top-left-radius:14px}#list .lg thead th:last-child{border-top-right-radius:14px}
+}
 .lg th{position:sticky;top:0;background:var(--gold-pale);color:var(--lacquer-deep);font-size:14.2px;font-weight:700;letter-spacing:.06em;text-align:left;padding:8px 10px;border-bottom:1px solid var(--gold-line);white-space:nowrap}
 .lg td{padding:8px 10px;border-top:1px solid var(--hair);vertical-align:top}
 .lg tbody tr:hover td{background:color-mix(in srgb,var(--gold-pale) 40%,var(--sheet))}
