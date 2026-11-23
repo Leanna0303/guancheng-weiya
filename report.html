@@ -348,12 +348,17 @@ $('bXlsx').onclick=async()=>{if(typeof ExcelJS==='undefined'){toast('Excel 元�
   s.gl.forEach(g=>{const u=uu(g.unit,'');u.gifts.push(g);});
   s.recs.forEach(r=>{const u=uu(r.unit,r.cat);u.web.push(r);});
   [...U.values()].forEach(u=>{if(!u.cat){const v=invFor(u.unit);if(v)u.cat=v.group;}});
-  const rows=[...U.values()].sort((a,b)=>String(a.cat).localeCompare(String(b.cat),'zh-Hant')||String(a.unit).localeCompare(String(b.unit),'zh-Hant')).map(u=>{const w=u.web[u.web.length-1]||{};
-    return[u.unit,u.cat,u.ppl.length||'',u.ppl.join('、'),[...u.tables].sort((a,b)=>a-b).join('、'),u.inN||'',
+  // 出席名單：座位系統有排就用座位名單，否則用名冊的回覆，再沒有就用網站報名填的名單
+  const listFor=u=>{if(u.ppl.length)return{n:u.ppl.length,l:u.ppl,src:'座位系統'};
+    const v=invFor(u.unit);if(v&&!v.merge&&v.reply==='yes'){const l=splitN(v.names);return{n:Number(v.count)||l.length,l,src:'邀請名冊'};}
+    const yw=u.web.filter(isYes);if(yw.length){const l=yw.flatMap(r=>splitN(r.names));return{n:yw.reduce((a,r)=>a+(Number(r.count)||0),0)||l.length,l,src:'網站報名'};}
+    return{n:'',l:[],src:''};};
+  const rows=[...U.values()].sort((a,b)=>String(a.cat).localeCompare(String(b.cat),'zh-Hant')||String(a.unit).localeCompare(String(b.unit),'zh-Hant')).map(u=>{const w=u.web[u.web.length-1]||{};const L=listFor(u);
+    return[u.unit,u.cat,L.n,L.l.join('、'),L.src,[...u.tables].sort((a,b)=>a-b).join('、'),u.inN||'',
       u.gifts.map(g=>g.item).join('；'),u.gifts.length?`${u.gifts.filter(g=>g.received).length}/${u.gifts.length}`:'',u.gifts.map(g=>g.due).filter(Boolean).join('；'),
       u.web.map(r=>r.ts).join('；'),[w.person,w.title].filter(Boolean).join(' '),w.attend||'',w.count||'',w.note||'',u.web.map(r=>r.wish).filter(Boolean).join('；'),
       u.gifts.map(g=>g.note).filter(Boolean).join('；')];});
-  sheet('出席、贊助與網站報名',[['單位',24],['類別',10],['出席人數',8],['出席名單（需求）',44],['桌號',10],['已報到',7],['贊助品',36],['已收到',8],['預計交付',14],['網站報名時間',18],['填表人',16],['網站回覆',10],['網站填的人數',8],['其他需求',24],['祝賀詞',36],['贊助備註',24]],rows);
+  sheet('出席、贊助與網站報名',[['單位',24],['類別',10],['出席人數',8],['出席名單（需求）',44],['名單來源',10],['桌號',10],['已報到',7],['贊助品',36],['已收到',8],['預計交付',14],['網站報名時間',18],['填表人',16],['網站回覆',10],['網站填的人數',8],['其他需求',24],['祝賀詞',36],['贊助備註',24]],rows);
   const buf=await wb.xlsx.writeBuffer();const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`冠成尾牙_年度總結_${(evt||'').replace(/\s/g,'')||new Date().toLocaleDateString('sv-SE')}.xlsx`;document.body.appendChild(a);a.click();a.remove();toast('已下載年度總結 Excel');};
 
