@@ -1,0 +1,269 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style><script>window.__KC_PREFIXES=['flow/','config/'];</script><script>/* Stand-in for the Claude page runtime: the same claude.use('db') / ('downloads') calls,
+   backed by the 冠成 Apps Script + Google Sheet, with a shared passcode. */
+(()=>{
+const API='https://script.google.com/macros/s/AKfycbx4J4jwRwaeZ1l8qbJXbwGf486TUU8jgg4FR1YHfr9CZgAne3XlDPVl-ayJx8q2mGw/exec';
+const PREFIXES=window.__KC_PREFIXES||null;
+const KEYK='kc37-passcode';
+let key=null;try{key=localStorage.getItem(KEYK);}catch(_){}
+async function call(body,tries=0){
+  let r;try{r=await fetch(API,{method:'POST',body:JSON.stringify({...body,key})});}
+  catch(e){if(tries<2){await new Promise(s=>setTimeout(s,1200*(tries+1)));return call(body,tries+1);}const x=new Error('network');x.code='unavailable';throw x;}
+  let j;try{j=await r.json();}catch(_){const x=new Error('bad response');x.code='unavailable';throw x;}
+  if(!j.ok){const x=new Error(j.error||'error');x.code=j.error==='bad_key'?'invalid_argument':'unavailable';x.badKey=j.error==='bad_key';throw x;}
+  return j;
+}
+window.__kcCall=call;
+
+// ---------- passcode gate ----------
+let readyRes;const ready=new Promise(r=>readyRes=r);
+function gate(msg){
+  const d=document.createElement('div');
+  d.style.cssText='position:fixed;inset:0;z-index:99;display:grid;place-items:center;padding:16px;background:rgba(30,10,12,.72)';
+  d.innerHTML=`<form style="background:#FFFDF9;color:#2E2622;border-radius:18px;border-top:4px solid #7A1520;padding:26px 24px;max-width:380px;width:100%;display:flex;flex-direction:column;gap:12px;font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;box-shadow:0 24px 70px rgba(0,0,0,.4)">
+    <div style="font-family:'Noto Serif TC',serif;font-size:22px;font-weight:900;letter-spacing:.06em">請輸入通關密碼</div>
+    <div style="font-size:15px;color:#5C514A">冠成尾牙內部使用，密碼請向負責同仁索取。這台裝置輸入一次就會記住。</div>
+    <input id="kcPass" autocomplete="current-password" type="password" style="font:inherit;font-size:18px;padding:10px 12px;border:1px solid #D9BF8A;border-radius:10px" aria-label="通關密碼">
+    <div id="kcErr" style="color:#B5541B;font-size:14px;min-height:1em">${msg||''}</div>
+    <button style="font:inherit;font-size:17px;font-weight:700;padding:10px;border:none;border-radius:999px;background:#7A1520;color:#F6E7C8;cursor:pointer">進入</button></form>`;
+  document.body.appendChild(d);const f=d.querySelector('form');setTimeout(()=>d.querySelector('input').focus(),0);
+  f.onsubmit=async e=>{e.preventDefault();const v=d.querySelector('input').value.trim();if(!v)return;key=v;d.querySelector('#kcErr').textContent='確認中…';
+    try{await call({op:'list',since:Date.now()+86400000});try{localStorage.setItem(KEYK,key);}catch(_){}d.remove();readyRes();}
+    catch(err){d.querySelector('#kcErr').textContent=err.badKey?'密碼不對，請再確認一次。':'連不上伺服器，請檢查網路後再試。';}};
+}
+async function start(){
+  if(key){try{await call({op:'list',since:Date.now()+86400000});readyRes();return;}catch(e){if(!e.badKey){readyRes();return;}}}
+  gate(key?'密碼已變更，請重新輸入。':'');
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
+window.kcLogout=()=>{try{localStorage.removeItem(KEYK);}catch(_){}location.reload();};
+
+// ---------- document store with polling ----------
+const cache=new Map();           // "coll/id" -> data
+const colL=new Map(),docL=new Map();
+const pend=new Map();            // key -> {json, waiters:[]}
+const inflight=new Set();
+let since=0,firstDone=false,firstRes;const first=new Promise(r=>firstRes=r);
+const depth=p=>p.split('/').length;
+const snapOf=(id,v)=>({id,exists:v!==undefined,data:()=>v,metadata:{fromCache:false,hasPendingWrites:false}});
+function colSnap(c){const docs=[];cache.forEach((v,k)=>{if(k.startsWith(c+'/')&&depth(k)===depth(c)+1)docs.push(snapOf(k.slice(c.length+1),v));});
+  docs.sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);return{docs,size:docs.length,empty:!docs.length,docChanges:()=>[],metadata:{fromCache:false,hasPendingWrites:false}};}
+function emit(keys){const cs=new Set(),ds=new Set();keys.forEach(k=>{ds.add(k);cs.add(k.slice(0,k.lastIndexOf('/')));});
+  cs.forEach(c=>(colL.get(c)||[]).forEach(fn=>{try{fn(colSnap(c));}catch(e){console.error(e);}}));
+  ds.forEach(d=>(docL.get(d)||[]).forEach(fn=>{try{fn(snapOf(d.split('/').pop(),cache.get(d)));}catch(e){console.error(e);}}));}
+async function poll(){
+  try{const j=await call({op:'list',since,prefixes:PREFIXES});
+    const ch=[];
+    j.docs.forEach(d=>{if(pend.has(d.k)||inflight.has(d.k))return;
+      if(d.del){if(cache.has(d.k)){cache.delete(d.k);ch.push(d.k);}}
+      else{const cur=cache.get(d.k);if(cur===undefined||JSON.stringify(cur)!==d.json){try{cache.set(d.k,JSON.parse(d.json));ch.push(d.k);}catch(_){}}}});
+    since=j.now-4000;
+    if(!firstDone){firstDone=true;firstRes();colL.forEach((fns,c)=>fns.forEach(fn=>fn(colSnap(c))));docL.forEach((fns,d)=>fns.forEach(fn=>fn(snapOf(d.split('/').pop(),cache.get(d)))));}
+    else if(ch.length)emit(ch);
+    setStatus('');
+  }catch(e){if(e.badKey){gate('密碼已變更，請重新輸入。');return;}setStatus('offline');}
+  setTimeout(poll,document.hidden?30000:6000);
+}
+ready.then(poll);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&firstDone)poll();});
+let flushT=null;
+function queue(k,json){return new Promise((res,rej)=>{const p=pend.get(k)||{waiters:[]};p.json=json;p.waiters.push({res,rej});pend.set(k,p);clearTimeout(flushT);flushT=setTimeout(flush,250);});}
+async function flush(){if(!pend.size)return;const items=[...pend.entries()].slice(0,150);items.forEach(([k])=>{pend.delete(k);inflight.add(k);});
+  try{await call({op:'write',writes:items.map(([k,p])=>({k,json:p.json}))});items.forEach(([,p])=>p.waiters.forEach(w=>w.res()));}
+  catch(e){items.forEach(([k,p])=>p.waiters.forEach(w=>w.rej(e)));}
+  finally{items.forEach(([k])=>inflight.delete(k));if(pend.size)flush();}}
+function setOne(k,data){const d=JSON.parse(JSON.stringify(data));cache.set(k,d);emit([k]);return queue(k,JSON.stringify(d));}
+function delOne(k){cache.delete(k);emit([k]);return queue(k,null);}
+function docRef(path){return{id:path.split('/').pop(),path,
+  set:d=>setOne(path,d),
+  update:d=>setOne(path,{...(cache.get(path)||{}),...d}),
+  delete:()=>delOne(path),
+  get:async()=>{await first;return snapOf(path.split('/').pop(),cache.get(path));},
+  onSnapshot:(fn)=>{if(!docL.has(path))docL.set(path,[]);docL.get(path).push(fn);if(firstDone)setTimeout(()=>fn(snapOf(path.split('/').pop(),cache.get(path))),0);return()=>{const a=docL.get(path);a.splice(a.indexOf(fn),1);};},
+  collection:c=>colRef(path+'/'+c)};}
+function colRef(c){return{path:c,doc:id=>docRef(c+'/'+(id||Math.random().toString(36).slice(2,12))),
+  add:async d=>{const r=docRef(c+'/'+Math.random().toString(36).slice(2,12));await r.set(d);return r;},
+  get:async()=>{await first;return colSnap(c);},
+  onSnapshot:(fn)=>{if(!colL.has(c))colL.set(c,[]);colL.get(c).push(fn);if(firstDone)setTimeout(()=>fn(colSnap(c)),0);return()=>{const a=colL.get(c);a.splice(a.indexOf(fn),1);};}};}
+const db={doc:docRef,collection:colRef};
+window.addEventListener('beforeunload',e=>{if(pend.size||inflight.size){e.preventDefault();e.returnValue='';}});
+
+// ---------- connection badge ----------
+let badge=null;
+function setStatus(s){if(!badge){badge=document.createElement('div');badge.style.cssText='position:fixed;left:max(12px,env(safe-area-inset-left,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:60;background:#B5541B;color:#fff;border-radius:999px;padding:6px 14px;font:600 14px "Noto Sans TC",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25)';badge.hidden=true;document.body.appendChild(badge);}
+  badge.hidden=!s;badge.textContent='⚠️ 網路中斷，恢復後會自動同步';}
+
+// ---------- downloads ----------
+const downloads={save:async({filename,data})=>{
+  const type=/\.html?$/i.test(filename)?'text/html;charset=utf-8':/\.xlsx$/i.test(filename)?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':/\.json$/i.test(filename)?'application/json':/\.jpe?g$/i.test(filename)?'image/jpeg':'application/octet-stream';
+  const blob=data instanceof Blob?data:new Blob([data],{type});const url=URL.createObjectURL(blob);
+  if(/\.html?$/i.test(filename)){const w=window.open(url,'_blank');if(w){setTimeout(()=>URL.revokeObjectURL(url),60000);return;}}
+  const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}};
+
+// ---------- back to top ----------
+function topBtn(){const b=document.createElement('button');b.type='button';b.setAttribute('aria-label','回到最上面');b.title='回到最上面';
+  b.innerHTML='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg><span style="font-size:12px;font-weight:700;line-height:1">頂部</span>';
+  b.style.cssText='position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:55;width:60px;height:60px;border-radius:50%;border:none;background:#7A1520;color:#F6E7C8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;box-shadow:0 8px 24px rgba(78,11,19,.35);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;transform:translateY(8px);font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif';
+  b.onclick=()=>window.scrollTo({top:0,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth'});
+  document.body.appendChild(b);
+  const upd=()=>{const on=window.scrollY>500;b.style.opacity=on?'1':'0';b.style.pointerEvents=on?'auto':'none';b.style.transform=on?'none':'translateY(8px)';};
+  window.addEventListener('scroll',upd,{passive:true});upd();}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',topBtn);else topBtn();
+
+window.claude={use:async n=>{if(n==='db'){await ready;return db;}if(n==='downloads')return downloads;return null;}};
+})();
+</script></head><body><title>冠成尾牙紙本邀請卡</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Noto+Serif+TC:wght@500;700;900&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+:root{
+  --paper:#FAF6EE; --sheet:#FFFDF9; --sunk:#F3ECDF; --hair:#E6DACA;
+  --ink:#2E2622; --ink-2:#5C514A; --muted:#8C7F74;
+  --lacquer:#7A1520; --lacquer-deep:#4E0B13; --on-lacquer:#F6E7C8;
+  --gold:#A8843F; --gold-line:#D9BF8A; --gold-pale:#F4E7CB;
+  --ok:#2F6F4A; --ok-pale:#E3EFE6; --warn:#B5541B; --warn-pale:#F8E8DC;
+  --display:"Noto Serif TC","Songti TC","PMingLiU",serif;
+  --body:"Noto Sans TC","Microsoft JhengHei","PingFang TC",system-ui,sans-serif;
+  --num:"Cormorant Garamond","Times New Roman",serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#16110F; --sheet:#1F1916; --sunk:#29211D; --hair:#3A302A; --ink:#F1E9DF; --ink-2:#CDBFB1; --muted:#9E9084;
+  --lacquer:#5E1019; --lacquer-deep:#3A070E; --on-lacquer:#F3E2BF; --gold:#D8B46E; --gold-line:#8C7340; --gold-pale:#3A2F1C;
+  --ok:#6CC08F; --ok-pale:#1F3328; --warn:#F09A62; --warn-pale:#3B2619; color-scheme:dark}}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.top{background:radial-gradient(120% 140% at 85% 0%,var(--lacquer) 0%,var(--lacquer-deep) 75%);color:var(--on-lacquer)}
+.top .in{max-width:1240px;margin:0 auto;padding:20px max(16px,env(safe-area-inset-right,0px)) 26px max(16px,env(safe-area-inset-left,0px));display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.top a.back{font-size:15px;color:var(--gold-line);text-decoration:none}
+h1{margin:4px 0 0;font-family:var(--display);font-weight:900;font-size:clamp(28px,4.5vw,38px);letter-spacing:.1em}
+.top .acts{display:flex;gap:8px;flex-wrap:wrap}
+main{max-width:1240px;margin:0 auto;padding:22px max(16px,env(safe-area-inset-right,0px)) 90px max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:20px}
+button,.btn{font:inherit;font-size:15.5px;border:1px solid var(--hair);background:var(--sheet);color:var(--ink);border-radius:999px;padding:8px 16px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;min-height:42px}
+button:hover{border-color:var(--gold)}
+.top .acts button{background:transparent;color:var(--on-lacquer);border-color:color-mix(in srgb,var(--gold-line) 60%,transparent)}
+.top .acts button.gold{background:var(--gold-line);color:var(--lacquer-deep);font-weight:700;border-color:var(--gold-line)}
+h3{margin:0 0 10px;font-family:var(--display);font-size:22px;letter-spacing:.06em;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+h3::before{content:"";width:20px;height:1px;background:var(--gold);align-self:center}
+h3 small{font-family:var(--body);font-weight:500;font-size:14px;color:var(--muted);letter-spacing:0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.kpi{background:var(--sheet);border:1px solid var(--hair);border-radius:14px;padding:12px 16px;display:flex;flex-direction:column}
+.kpi b{font-family:var(--num);font-size:36px;line-height:1.05;font-weight:600;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1}
+.kpi span{font-size:14px;color:var(--muted)}
+.kpi.warn b{color:var(--warn)}.kpi.ok b{color:var(--ok)}.kpi.gold b{color:var(--gold)}
+.note{background:var(--gold-pale);border-radius:14px;padding:12px 18px;font-size:15.5px;color:var(--ink-2)}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.tabs button{min-height:38px;font-size:15px}
+.tabs button.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.tw{background:var(--sheet);border:1px solid var(--hair);border-radius:16px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:1060px}
+th{font-size:13.5px;color:var(--muted);font-weight:700;text-align:left;padding:10px 8px;background:var(--sunk);white-space:nowrap}
+td{padding:6px 8px;border-top:1px solid var(--hair);vertical-align:middle;font-size:15px}
+tr.grp td{background:var(--gold-pale);font-family:var(--display);font-weight:700;font-size:17px;color:var(--lacquer);padding:8px 12px}
+td.no{color:var(--muted);text-align:center;width:40px;font-size:13.5px}
+td input[type=text],td input[type=number],td select{font:inherit;font-size:15px;color:var(--ink);background:var(--paper);border:1px solid transparent;border-radius:8px;padding:5px 7px;width:100%}
+td input[type=text]:hover,td input[type=number]:hover,td select:hover{border-color:var(--hair)}
+td input:focus,td select:focus{border-color:var(--gold);outline:none;background:var(--sheet)}
+td input[type=number]{width:64px;text-align:center}
+td select{width:90px}
+td input[type=checkbox]{width:22px;height:22px;accent-color:var(--ok)}
+td.u input{font-weight:700}
+td.a{min-width:280px}
+td.sc{white-space:nowrap}
+td .d{font-size:12.5px;color:var(--ok)}
+tr.sent td{background:color-mix(in srgb,var(--ok-pale) 55%,transparent)}
+.del{white-space:nowrap;min-height:30px;padding:2px 10px;font-size:13px;color:var(--warn);border-color:transparent;background:transparent}
+.toast{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:9px 18px;border-radius:999px;font-size:15px;z-index:120}
+.empty{padding:30px;text-align:center;color:var(--muted)}
+</style>
+
+<header class="top"><div class="in">
+  <div><a class="back" href="admin.html">← 回工作台</a><h1>紙本邀請卡</h1></div>
+  <div class="acts"><button id="pList">列印寄送清單</button><button id="pLabel" class="gold">列印信封標籤</button></div>
+</div></header>
+
+<main>
+  <div class="kpis" id="kpis"></div>
+  <div class="note" id="need"></div>
+
+  <section>
+    <h3>名單<small>政商、教育界、各廠牌高層（只邀請、不贊助）。直接在表格裡改，會自動存檔，大家看得到。</small></h3>
+    <div class="tabs" id="tabs"></div>
+    <div class="tw"><table>
+      <thead><tr><th>#</th><th>單位</th><th>收件人</th><th>寄送方式</th><th>地址／轉交給誰</th><th>去年人數</th><th>備註</th><th>已寄出</th><th></th></tr></thead>
+      <tbody id="tb"><tr><td colspan="9" class="empty">載入中…</td></tr></tbody>
+    </table></div>
+    <div style="margin-top:10px"><button id="addBtn">＋ 新增一筆</button></div>
+  </section>
+</main>
+
+<script>
+(()=>{
+const SEED=[{"group":"政商","unit":"彰化縣政府","person":"王惠美縣長","addr":"500彰化縣彰化市中山路二段 416 號","ly":"","note":"","how":"郵寄","id":"c01"},{"group":"政商","unit":"和美鎮公所","person":"林庚壬鎮長","addr":"508彰化縣和美鎮鹿和路6段337號","ly":"","note":"","how":"郵寄","id":"c02"},{"group":"政商","unit":"和美警察局","person":"吳永森分局長","addr":"508彰化縣和美鎮彰美路五段328號","ly":6,"note":"陳副分局長、侯組長等6人","how":"郵寄","id":"c03"},{"group":"政商","unit":"彰化縣警察局北斗分局","person":"楊志遠分局長","addr":"521彰化縣北斗鎮光復路215號","ly":"","note":"","how":"郵寄","id":"c04"},{"group":"政商","unit":"和美鎮農會","person":"郭德勝理事長、謝燕如總幹事、黃建豐常務監事","addr":"508彰化縣和美鎮彰美路五段266號","ly":3,"note":"","how":"郵寄","id":"c05"},{"group":"政商","unit":"耀億工業股份有限公司","person":"王昭仁董事長","addr":"508彰化縣和美鎮彰美路6段334號","ly":"","note":"","how":"郵寄","id":"c06"},{"group":"政商","unit":"陳秀寶立委","person":"","addr":"505彰化縣鹿港鎮鹽埕巷30之32號","ly":"","note":"","how":"郵寄","id":"c07"},{"group":"政商","unit":"蔡志嘉代表","person":"","addr":"508彰化縣和美鎮東發路172號","ly":2,"note":"","how":"郵寄","id":"c08"},{"group":"政商","unit":"周平代表","person":"","addr":"500彰化市忠誠路21號","ly":2,"note":"柏緯朋友","how":"郵寄","id":"c09"},{"group":"政商","unit":"温芝樺議員","person":"","addr":"500彰化縣彰化市中興路73號","ly":2,"note":"","how":"郵寄","id":"c10"},{"group":"政商","unit":"冠穎聯合會計師事務所","person":"蔡沼玲執行長","addr":"500彰化縣彰化市建國北路91號","ly":2,"note":"","how":"郵寄","id":"c11"},{"group":"教育界","unit":"新庄國小","person":"吳文輝校長","addr":"","ly":6,"note":"","how":"親送","id":"c12"},{"group":"教育界","unit":"和美高中","person":"徐進將校長","addr":"508彰化縣和美鎮西園路三十一號","ly":2,"note":"徐校長及家長會王會長","how":"郵寄","id":"c13"},{"group":"教育界","unit":"大成國小","person":"張鴻章校長","addr":"500彰化市自強路303號","ly":"","note":"","how":"郵寄","id":"c14"},{"group":"教育界","unit":"和美國小","person":"陳曉琪校長","addr":"508彰化縣和美鎮和平街19號","ly":"","note":"","how":"郵寄","id":"c15"},{"group":"教育界","unit":"彰化女中","person":"陳香沄校長","addr":"500彰化縣彰化市光復路62號","ly":"","note":"","how":"郵寄","id":"c16"},{"group":"教育界","unit":"社頭國中","person":"陳靜宜校長","addr":"511彰化縣社頭鄉中興路1號","ly":0,"note":"","how":"郵寄","id":"c17"},{"group":"教育界","unit":"和群國中","person":"林欣溦校長","addr":"508彰化縣和美鎮美寮路一段390號","ly":"","note":"","how":"郵寄","id":"c18"},{"group":"教育界","unit":"陽明國中","person":"張耀忠校長","addr":"500彰化縣彰化市長順街76號","ly":2,"note":"張校長及家長會李會長","how":"郵寄","id":"c19"},{"group":"教育界","unit":"和東國小","person":"柯伯儒校長","addr":"508彰化縣和美鎮彰美路五段210號","ly":"","note":"","how":"郵寄","id":"c20"},{"group":"教育界","unit":"線西國小","person":"陳龍彬校長","addr":"507彰化縣線西鄉中央路二段135號","ly":"","note":"","how":"郵寄","id":"c21"},{"group":"教育界","unit":"線西國中","person":"黃柏創校長","addr":"507彰化縣線西鄉中央路二段145號","ly":2,"note":"","how":"郵寄","id":"c22"},{"group":"教育界","unit":"鹿鳴國中","person":"許毅貞校長","addr":"505彰化縣鹿港鎮頂草路三段167號","ly":"","note":"","how":"郵寄","id":"c23"},{"group":"教育界","unit":"新港國小","person":"施舜馨校長","addr":"509彰化縣伸港鄉和平路60號","ly":"","note":"","how":"郵寄","id":"c24"},{"group":"教育界","unit":"明正國小","person":"林俊成校長","addr":"504彰化縣秀水鄉彰水路二段341號","ly":"","note":"","how":"郵寄","id":"c25"},{"group":"教育界","unit":"三民國小","person":"胡慧嘉校長","addr":"500彰化縣彰化市田中路125號","ly":"","note":"","how":"郵寄","id":"c26"},{"group":"教育界","unit":"和仁國小","person":"胡素慈校長","addr":"508彰化縣和美鎮仁愛路279號","ly":2,"note":"","how":"郵寄","id":"c27"},{"group":"教育界","unit":"埤頭國中","person":"謝清森校長","addr":"523彰化縣埤頭鄉中學路67號","ly":1,"note":"","how":"郵寄","id":"c28"},{"group":"教育界","unit":"彰化高中","person":"王延煌校長","addr":"500彰化縣彰化市中興路78號","ly":"","note":"","how":"郵寄","id":"c29"},{"group":"教育界","unit":"培英國小","person":"蕭健治校長","addr":"508彰化縣和美鎮彰新路五段310號","ly":"","note":"","how":"郵寄","id":"c30"},{"group":"教育界","unit":"曉陽國小","person":"傅肇箕校長","addr":"507彰化縣線西鄉頂犁路158-1號","ly":2,"note":"傅肇箕校長&家長會長","how":"郵寄","id":"c31"},{"group":"教育界","unit":"二林工商","person":"丁志昱校長","addr":"526彰化縣二林鎮斗苑路四段500-1號","ly":1,"note":"","how":"郵寄","id":"c32"},{"group":"教育界","unit":"馬興國小","person":"張榮裕校長","addr":"504彰化縣秀水鄉馬興村培英巷1號","ly":0,"note":"","how":"郵寄","id":"c33"},{"group":"教育界","unit":"二林高中","person":"黃洲海校長","addr":"526彰化縣二林鎮中西里二城路6號","ly":2,"note":"","how":"郵寄","id":"c34"},{"group":"教育界","unit":"建國科大","person":"江金山校長","addr":"500彰化縣彰化市介壽北路1號","ly":2,"note":"江校長及校長夫人","how":"郵寄","id":"c35"},{"group":"教育界","unit":"國立和美實驗學校","person":"許弘憲校長","addr":"508彰化縣和美鎮鹿和路六段115號","ly":2,"note":"許弘憲校長及吳主任","how":"郵寄","id":"c36"},{"group":"教育界","unit":"大榮國小","person":"曾美娟校長","addr":"508彰化縣和美鎮嘉佃路296號","ly":1,"note":"曾美娟校長","how":"郵寄","id":"c37"},{"group":"廠牌高層","unit":"日立冷氣","person":"蔡清海總經理、潘昌茂協理、黃斌智經理","addr":"104台北市南京東路三段63號","ly":"","note":"","how":"郵寄","id":"c38"},{"group":"廠牌高層","unit":"日立冷氣","person":"葉松易處長","addr":"408台中市南屯區五權西路二段822號","ly":"","note":"","how":"郵寄","id":"c39"},{"group":"廠牌高層","unit":"日立冷氣","person":"連峯明處長暨全體同仁","addr":"","ly":"","note":"統一給享偉經理","how":"轉交","id":"c40"},{"group":"廠牌高層","unit":"台灣松下股份有限公司","person":"黃政成董事長","addr":"235新北市中和區員山路579號","ly":"","note":"","how":"郵寄","id":"c41"},{"group":"廠牌高層","unit":"台灣松下銷售股份有限公司","person":"王仁孝總經理","addr":"406台中市北屯區新興路12巷1號","ly":"","note":"","how":"郵寄","id":"c42"},{"group":"廠牌高層","unit":"台灣松下銷售股份有限公司","person":"陳國棟經理暨全體同仁","addr":"406台中市北屯區新興路12巷1號","ly":"","note":"","how":"郵寄","id":"c43"},{"group":"廠牌高層","unit":"台灣松下銷售股份有限公司","person":"劉炳榮處長","addr":"500彰化縣彰化市建國北路208號","ly":"","note":"","how":"郵寄","id":"c44"},{"group":"廠牌高層","unit":"東元","person":"彭継曾總經理","addr":"115台北市南港區三重路19-9號5樓","ly":"","note":"","how":"郵寄","id":"c45"},{"group":"廠牌高層","unit":"東元","person":"左達清處長暨全體同仁","addr":"115台北市南港區三重路19-9號5樓","ly":"","note":"","how":"郵寄","id":"c46"},{"group":"廠牌高層","unit":"聲寶","person":"許經朝總經理","addr":"333桃園市龜山區大華里村頂湖路26號","ly":"","note":"","how":"郵寄","id":"c47"},{"group":"廠牌高層","unit":"聲寶","person":"章巧薇副總經理、鄭紹甫協理、賴文彬經理","addr":"333桃園市龜山區大華里村頂湖路26號","ly":"","note":"","how":"郵寄","id":"c48"},{"group":"廠牌高層","unit":"聲寶","person":"王銅朋課長暨全體同仁","addr":"","ly":"","note":"轉交士晉","how":"轉交","id":"c49"},{"group":"廠牌高層","unit":"聲寶","person":"洪志田經理、王清標主任、呂思翰課長","addr":"","ly":"","note":"轉交士晉（門市）","how":"轉交","id":"c50"},{"group":"廠牌高層","unit":"禾聯","person":"蔡柏毅董事長","addr":"333桃園市龜山區華亞科技園區科技三路88號","ly":"","note":"","how":"郵寄","id":"c51"},{"group":"廠牌高層","unit":"禾聯","person":"林欽宏總經理、洪堯鴻營業部總經理、高建發副總","addr":"333桃園市龜山區華亞科技園區科技三路88號","ly":"","note":"","how":"郵寄","id":"c52"},{"group":"廠牌高層","unit":"禾聯","person":"王河山協理、禾聯陳勝源經理暨全體同仁","addr":"","ly":"","note":"轉交王欽鋒","how":"轉交","id":"c53"},{"group":"廠牌高層","unit":"台中禾聯公司","person":"邱能淵服務副理","addr":"414臺中市南屯區精科二路6號","ly":"","note":"","how":"郵寄","id":"c54"},{"group":"廠牌高層","unit":"冰點","person":"林正直董事長、林沄錚營運中心 副總經理、林傳進協理","addr":"743台南市山上區新莊里新庄59號","ly":"","note":"","how":"郵寄","id":"c55"},{"group":"廠牌高層","unit":"大金","person":"吳耀輝、蘇新智營運長","addr":"500彰化縣彰化市彰南路一段162號","ly":"","note":"","how":"郵寄","id":"c56"},{"group":"廠牌高層","unit":"LG台灣樂金","person":"陳緯峻副理","addr":"","ly":"","note":"給本人","how":"給本人","id":"c57"},{"group":"廠牌高層","unit":"大同","person":"曹創閔副理","addr":"","ly":"","note":"給本人","how":"給本人","id":"c58"}];
+const GR=['政商','教育界','廠牌高層'],HOW=['郵寄','轉交','親送','給本人'];
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m){const d=document.createElement('div');d.className='toast';d.textContent=m;document.body.appendChild(d);setTimeout(()=>d.remove(),2600);}
+let C=null,DB=null,tab='all',saveT=null;
+function save(){if(!DB)return;clearTimeout(saveT);saveT=setTimeout(async()=>{try{await DB.doc('flow/cards').set(C);}catch(_){toast('存檔失敗，請檢查網路');}finally{saveT=null;}},400);}
+function render(){if(!C)return;const L=C.list;
+  const sent=L.filter(x=>x.sent).length,ly=L.reduce((a,x)=>a+(Number(x.ly)||0),0);
+  const by=h=>L.filter(x=>x.how===h).length;
+  $('kpis').innerHTML=[[L.length,'紙本卡張數','gold'],[L.length-sent,'還沒寄出',L.length-sent?'warn':'ok'],[sent,'已寄出','ok'],[by('郵寄'),'郵寄'],[by('轉交')+by('給本人'),'轉交／給本人'],[by('親送'),'親送'],[ly,'去年出席人數']]
+    .map(([v,l,c])=>`<div class="kpi ${c||''}"><b>${v}</b><span>${l}</span></div>`).join('');
+  const nMail=by('郵寄');
+  $('need').innerHTML=`共需 <b>${L.length}</b> 張紙本邀請卡（郵寄 ${nMail} 張需要信封標籤）。到大中華領卡時，數量請抓 <b>${L.length}</b> 張以上，另加幾張備用。`;
+  $('tabs').innerHTML=[['all','全部 '+L.length]].concat(GR.map(g=>[g,g+' '+L.filter(x=>x.group===g).length])).map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${esc(l)}</button>`).join('');
+  let n=0;
+  $('tb').innerHTML=GR.filter(g=>tab==='all'||tab===g).map(g=>{const its=L.filter(x=>x.group===g);if(!its.length)return'';
+    return `<tr class="grp"><td colspan="9">${g}　<span style="font-family:var(--body);font-size:14px;color:var(--muted);font-weight:500">${its.length} 張</span></td></tr>`+its.map(x=>{n++;return `<tr data-id="${x.id}" class="${x.sent?'sent':''}">
+      <td class="no">${n}</td>
+      <td class="u"><input type="text" data-f="unit" value="${esc(x.unit)}" aria-label="單位"></td>
+      <td><input type="text" data-f="person" value="${esc(x.person)}" aria-label="收件人"></td>
+      <td><select data-f="how" aria-label="寄送方式">${HOW.map(h=>`<option ${h===x.how?'selected':''}>${h}</option>`).join('')}</select></td>
+      <td class="a"><input type="text" data-f="addr" value="${esc(x.addr)}" placeholder="${x.how==='郵寄'?'郵遞區號＋地址':x.how==='轉交'?'轉交給誰':''}" aria-label="地址"></td>
+      <td><input type="number" min="0" data-f="ly" value="${esc(x.ly)}" aria-label="去年人數"></td>
+      <td><input type="text" data-f="note" value="${esc(x.note)}" aria-label="備註"></td>
+      <td class="sc"><input type="checkbox" data-f="sent" ${x.sent?'checked':''} aria-label="已寄出">${x.sentAt?`<div class="d">${esc(x.sentAt)}</div>`:''}</td>
+      <td><button class="del" data-del="${x.id}">刪除</button></td></tr>`;}).join('');}).join('')||'<tr><td colspan="9" class="empty">沒有資料</td></tr>';
+}
+document.addEventListener('change',e=>{const tr=e.target.closest('tr[data-id]');if(!tr||!C)return;const x=C.list.find(y=>y.id===tr.dataset.id);const f=e.target.dataset.f;if(!x||!f)return;
+  if(f==='sent'){x.sent=e.target.checked;x.sentAt=x.sent?new Date().toLocaleDateString('zh-TW',{month:'numeric',day:'numeric'})+' 寄出':'';}
+  else if(f==='ly')x.ly=e.target.value===''?'':Number(e.target.value);
+  else x[f]=e.target.value.trim();
+  render();save();});
+document.addEventListener('click',e=>{const t=e.target.closest('button');if(!t)return;
+  if(t.dataset.tab){tab=t.dataset.tab;render();return;}
+  if(t.dataset.del){if(!t.dataset.arm){t.dataset.arm=1;t.textContent='確定刪除？';return;}C.list=C.list.filter(y=>y.id!==t.dataset.del);render();save();return;}});
+$('addBtn').onclick=()=>{if(!C)return;const g=tab==='all'?'政商':tab;C.list.push({id:'c'+Date.now().toString(36),group:g,unit:'',person:'',addr:'',ly:'',note:'',how:'郵寄'});
+  const L=C.list;const last=L.pop();const k=L.map(x=>x.group).lastIndexOf(g);L.splice(k+1,0,last);render();save();
+  setTimeout(()=>{const r=document.querySelector(`tr[data-id="${last.id}"] input`);r&&r.focus();},50);};
+
+// ---------- print ----------
+function openPrint(title,body,css){const w=window.open('','_blank');if(!w){toast('請允許彈出視窗');return;}
+  w.document.write(`<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>${title}</title><style>*{box-sizing:border-box}body{margin:0;font-family:"Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;color:#1d1714;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .bar{position:sticky;top:0;background:#7A1520;color:#fff;padding:10px 16px;display:flex;gap:14px;align-items:center;font-size:14px;z-index:5}.bar button{font:inherit;font-weight:700;padding:6px 20px;border:none;border-radius:999px;background:#fff;color:#7A1520;cursor:pointer}
+  @media print{.bar{display:none}}${css}</style></head><body>${body}</body></html>`);w.document.close();}
+$('pList').onclick=()=>{if(!C)return;let n=0;const date=new Date().toLocaleDateString('zh-TW');
+  const body=`<div class="bar"><span>紙本邀請卡寄送清單（${C.list.length} 張）</span><button onclick="print()">列印</button><span style="opacity:.85;font-size:12.5px">A4 直向</span></div><main>
+  <h1>冠成家電尾牙　紙本邀請卡寄送清單</h1><div class="r">共 ${C.list.length} 張・列印日期：${date}</div>
+  ${GR.map(g=>{const its=C.list.filter(x=>x.group===g);if(!its.length)return'';return `<h2>${g}<span>${its.length} 張</span></h2><table><thead><tr><th class="no">#</th><th>單位／收件人</th><th class="h">方式</th><th>地址／轉交</th><th class="c">去年<br>人數</th><th>備註</th><th class="c">已寄</th></tr></thead><tbody>${its.map(x=>{n++;return `<tr><td class="no">${n}</td><td><b>${esc(x.unit)}</b> ${esc(x.person)}</td><td class="h">${esc(x.how)}</td><td>${esc(x.addr)}</td><td class="c">${x.ly===''||x.ly==null?'—':esc(x.ly)}</td><td>${esc(x.note)}</td><td class="c">${x.sent?'☑':'☐'}</td></tr>`;}).join('')}</tbody></table>`;}).join('')}</main>`;
+  openPrint('紙本邀請卡寄送清單',body,`@page{size:A4 portrait;margin:10mm}@media screen{body{background:#e9e4dc}main{background:#fff;max-width:210mm;margin:14px auto;padding:10mm}}
+  h1{font-size:18pt;color:#7A1520;letter-spacing:.1em;margin:0}.r{color:#5C514A;font-size:10.5pt;margin:1mm 0 3mm;border-bottom:2pt double #A8843F;padding-bottom:2mm}
+  h2{font-size:13pt;color:#7A1520;margin:4mm 0 1.5mm;break-after:avoid}h2 span{font-size:10pt;color:#8C7F74;margin-left:3mm;font-weight:500}
+  table{width:100%;border-collapse:collapse;font-size:10pt;table-layout:fixed}thead{display:table-header-group}tr{break-inside:avoid}
+  th{background:#F4E7CB;color:#4E0B13;text-align:left;padding:1mm 1.4mm;border:.5pt solid #D9BF8A;font-size:9.5pt}td{border:.5pt solid #DCCFBE;padding:1mm 1.4mm;vertical-align:top;overflow-wrap:anywhere}
+  .no{width:8mm;text-align:center;color:#8C7F74}.h{width:13mm}.c{width:11mm;text-align:center}th:nth-child(2){width:58mm}th:nth-child(4){width:52mm}`);};
+$('pLabel').onclick=()=>{if(!C)return;const L=C.list.filter(x=>x.how==='郵寄'&&x.addr);if(!L.length){toast('沒有要郵寄的名單');return;}
+  const lab=x=>{const m=/^(\d{3,6})\s*(.*)$/.exec(x.addr)||[null,'',x.addr];return `<div class="lb"><div class="z">${esc(m[1])}</div><div class="a">${esc(m[2])}</div><div class="n">${esc(x.unit)}${x.person?`<br>${esc(x.person)}`:''}　<span>鈞啟</span></div></div>`;};
+  const body=`<div class="bar"><span>信封標籤（${L.length} 張，A4 每頁 3×7＝21 格）</span><button onclick="print()">列印</button><span style="opacity:.85;font-size:12.5px">A4 直向、邊界選「無」、縮放 100%</span></div><main>${L.map(lab).join('')}</main>`;
+  openPrint('紙本邀請卡信封標籤',body,`@page{size:A4 portrait;margin:0}@media screen{body{background:#e9e4dc}main{background:#fff;width:210mm;margin:14px auto}}
+  main{display:grid;grid-template-columns:repeat(3,70mm);grid-auto-rows:42.4mm;padding:0}.lb{padding:4mm 5mm;overflow:hidden;border:.2pt dashed #ddd;break-inside:avoid}
+  @media print{.lb{border:none}}.z{font-size:11pt;letter-spacing:.15em;color:#5C514A}.a{font-size:10.5pt;line-height:1.35;margin-bottom:1.5mm}.n{font-size:12.5pt;font-weight:700;line-height:1.35}.n span{font-weight:400;font-size:10.5pt}`);};
+
+(async()=>{const db=await claude.use('db');DB=db;
+  db.doc('flow/cards').onSnapshot(s=>{if(saveT)return;
+    if(s.exists&&s.data().list){C=s.data();render();}
+    else if(!C){C={list:SEED.map(x=>({...x,sent:false,sentAt:''}))};render();save();}});
+})();
+})();
+</script>
+</body></html>

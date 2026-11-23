@@ -797,7 +797,7 @@ const u=()=>{const on=scrollY>700;b.style.opacity=on?'1':'0';b.style.pointerEven
   /* only once per visit: a guest coming back to fill the form isn't made to reopen it */
   let seen=false;try{seen=sessionStorage.getItem('kc-env')==='1'||/#rsvp|#f\b/.test(location.hash);}catch(_){}
   const done=()=>{env.classList.add('gone');document.body.classList.remove('sealed');try{sessionStorage.setItem('kc-env','1');}catch(_){};setTimeout(()=>env.remove(),900);};
-  if(seen){env.remove();return;}
+  if(seen){env.remove();const mb=document.getElementById('bgmBtn');if(mb){mb.hidden=false;mb.classList.remove('on');mb.setAttribute('aria-label','播放音樂');mb.querySelector('span').textContent='靜音';mb.style.opacity='.7';}return;}
   document.body.classList.add('sealed');
   const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
   let started=false;
