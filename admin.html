@@ -409,6 +409,14 @@ function fixFlow(){if(flowFixed||!FLOW||!DB||EDIT)return;flowFixed=true;
     const st=F.stages.find(st=>st.items.some(it=>/發送邀請/.test(it.t)))||F.stages.find(st=>/邀請/.test(st.name));
     if(st){const k=st.items.findIndex(it=>/發送邀請/.test(it.t));
       st.items.splice(k<0?st.items.length:k,0,{id:'i'+Math.random().toString(36).slice(2,9),t:'請人員去大中華領紙本邀請卡 80 份，並先通知大中華我們哪一天、幾點會去領',who:'承辦',tip:'紙本卡名單目前 58 張（工作台「紙本邀請卡」），80 份含備用'});}}
+  // 12 月中旬試菜一天，邀國際合展參與同仁
+  if(!F.stages.some(st=>st.items.some(it=>/試菜/.test(it.t)))){const nid=()=>'i'+Math.random().toString(36).slice(2,9);
+    const inner=F.stages.find(st=>/公司內部/.test(st.name));
+    if(inner)inner.items.push({id:nid(),t:'跟大中華約 12 月中旬試菜日期（約一天），並邀請國際合展參與同仁一起試菜',who:'承辦',tip:'統計試菜人數，提前告知大中華'});
+    F.stages.push({name:'餐廳試菜',from:-31,to:-28,items:[
+      {id:nid(),t:'試菜：確認菜色、份量、出菜順序，以及素食、不吃牛的替代菜',who:'承辦／大哥',tip:'國際合展參與同仁一起試吃，意見當場整理給大中華'},
+      {id:nid(),t:'試菜後把要調整的菜色、桌數與最終菜單跟大中華確認',who:'承辦',tip:''}]});
+    F.stages.sort((x,y)=>x.from-y.from);}
   F.day=(F.day||[]).map(fixName);(F.notes||[]).forEach(n=>{n.l=(n.l||[]).map(fixName);});
   if(JSON.stringify(F)!==JSON.stringify(FLOW)){FLOW=F;DB.doc('flow/main').set(F).catch(()=>{flowFixed=false;});}}
 document.addEventListener('change',async e=>{const k=e.target.dataset.ck;if(!k||!DB)return;CHK={...CHK,[k]:e.target.checked};renderFlow();try{await DB.doc('check/flow').set(CHK);}catch(_){toast('儲存失敗');}});
