@@ -486,6 +486,9 @@ function fromRemote(){const n=blank();n.sample=false;n.cap=(got.meta&&got.meta.c
   n.groups=got.sg.map(d=>({...d.data,id:d.id}));
   n.tables=got.st.map(d=>({...d.data,id:d.id}));return repair(n);}
 async function boot(){booted=true;
+  {const ra=got.meta&&got.meta.resetAt;let seen=null;try{seen=localStorage.getItem('kc-seat-reset');}catch(_){}
+   if(ra&&String(ra)!==seen){try{localStorage.setItem('kc-seat-reset',String(ra));}catch(_){}
+     if(!got.st.length){loadSample();try{localStorage.setItem(KEY,JSON.stringify(S));}catch(_){}setSync('☁️ 測試資料已清除，匯入名單後會自動同步');safeRender();return;}}}
   if(got.st.length){S=fromRemote();KINDS.forEach(([k])=>got[k].forEach(d=>shadow[k].set(d.id,canon(d.data))));shadowMeta=canon({cap:S.cap});
     applyArrive();try{localStorage.setItem(KEY,JSON.stringify(S));}catch(_){}if(curT&&!T(curT))curT=null;setSync(RO?'👀 唯讀・自動更新':'☁️ 已同步');safeRender();return;}
   if(RO){S=blank();S.sample=false;$('roBanner').textContent='負責人還沒有上傳座位資料。';safeRender();return;}

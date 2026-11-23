@@ -1,4 +1,4 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style><script>window.__KC_PREFIXES=['invites/','config/','sp/','arrive/','gifts/','flow/','check/'];</script><script>/* Stand-in for the Claude page runtime: the same claude.use('db') / ('downloads') calls,
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex,nofollow"><style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style><script>window.__KC_PREFIXES=['invites/','config/','sp/','sg/','st/','meta/','seating/','arrive/','gifts/','flow/','check/'];</script><script>/* Stand-in for the Claude page runtime: the same claude.use('db') / ('downloads') calls,
    backed by the 冠成 Apps Script + Google Sheet, with a shared passcode. */
 (()=>{
 const API='https://script.google.com/macros/s/AKfycbx4J4jwRwaeZ1l8qbJXbwGf486TUU8jgg4FR1YHfr9CZgAne3XlDPVl-ayJx8q2mGw/exec';
@@ -225,6 +225,17 @@ h3 small{font-family:var(--body);font-weight:500;font-size:14px;color:var(--mute
 .edbar{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;background:var(--sheet);border:1px solid var(--lacquer);border-radius:999px;padding:8px 10px;box-shadow:0 10px 30px -10px rgba(0,0,0,.3);z-index:5}
 .btnx{color:var(--warn)!important}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.danger{color:var(--warn);border-color:var(--warn)}
+.danger.solid{background:var(--warn);color:#fff}
+.ovl{position:fixed;inset:0;background:rgba(30,10,12,.55);display:grid;place-items:center;z-index:60;padding:16px}
+.rdlg{background:var(--sheet);border-radius:18px;max-width:580px;width:100%;max-height:90vh;overflow:auto;padding:22px 24px;display:flex;flex-direction:column;gap:12px;border-top:4px solid var(--warn)}
+.rdlg h4{margin:0;font-family:var(--display);font-size:22px}
+.rdlg label.o{display:grid;grid-template-columns:24px minmax(0,1fr);gap:10px;align-items:start;padding:10px 12px;border:1px solid var(--hair);border-radius:12px;cursor:pointer}
+.rdlg label.o input{width:20px;height:20px;margin-top:3px;accent-color:var(--warn)}
+.rdlg label.o small{display:block;color:var(--muted);font-size:13.5px}
+.rdlg .warnbox{background:var(--warn-pale);border-radius:12px;padding:12px 16px;font-size:15.5px}
+.rdlg .warnbox ul{margin:6px 0 0;padding-left:20px}
+.rdlg .acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 </style>
 
 <section class="cover"><div class="in"><div class="frame">
@@ -287,6 +298,13 @@ h3 small{font-family:var(--body);font-weight:500;font-size:14px;color:var(--mute
     <h3>重要注意事項</h3>
     <div class="notes" id="notes"></div>
   </section>
+
+  <section class="reset">
+    <h3>測試資料<small>正式開始前，把測試時填的報名、贊助、座位一次清掉</small></h3>
+    <div class="site"><div><b>清除測試資料</b><div class="d" style="font-size:14.5px;color:var(--muted)">會先讓你勾選要清哪些，再確認一次；清除前會自動下載一份備份檔。</div></div>
+      <div class="acts"><button id="resetBtn" class="danger">🧹 清除測試資料</button></div></div>
+  </section>
+  <div class="ovl" id="rOvl" hidden><div class="rdlg" id="rDlg" role="dialog" aria-modal="true" aria-labelledby="rTitle"></div></div>
 
   <div class="foot"><span>資料每幾秒自動更新。內部使用，請勿把密碼外流。</span><button onclick="kcLogout()">登出這台裝置</button></div>
 </main>
@@ -421,6 +439,58 @@ function fixFlow(){if(flowFixed||!FLOW||!DB||EDIT)return;flowFixed=true;
   if(JSON.stringify(F)!==JSON.stringify(FLOW)){FLOW=F;DB.doc('flow/main').set(F).catch(()=>{flowFixed=false;});}}
 document.addEventListener('change',async e=>{const k=e.target.dataset.ck;if(!k||!DB)return;CHK={...CHK,[k]:e.target.checked};renderFlow();try{await DB.doc('check/flow').set(CHK);}catch(_){toast('儲存失敗');}});
 render();renderFlow();
+// ---------- 清除測試資料 ----------
+$('resetBtn').onclick=async()=>{if(!DB){toast('資料還在載入');return;}const b=$('resetBtn');b.disabled=true;b.textContent='計算中…';
+  try{
+  const col=async c=>(await DB.collection(c).get()).docs.map(d=>({id:d.id,data:d.data()}));
+  const doc=async k=>{const d=await DB.doc(k).get();return d.exists?d.data():null;};
+  const [inv,gifts,sp,sg,st,arr]=await Promise.all(['invites','gifts','sp','sg','st','arrive'].map(col));
+  const [fix,lot,chk,cards,meta,seatOld]=await Promise.all(['config/webfix','flow/lottery','check/flow','flow/cards','meta/main','seating/state'].map(doc));
+  let web=[];try{web=(await window.__kcCall({op:'web'})).rows||[];}catch(_){}
+  const hs=s=>{let h=5381;for(const c of s)h=((h*33)^c.charCodeAt(0))>>>0;return h.toString(36);};
+  const ts=r=>{const k=Object.keys(r).find(h=>/時間戳記/.test(h));return k?String(r[k]??'').trim():'';};
+  const FX=(fix&&fix.fix)||{};const webKeys=web.map(r=>'w'+hs(ts(r)||JSON.stringify(r)));const webLive=webKeys.filter(k=>!(FX[k]&&FX[k].hide));
+  const invNew=inv.filter(d=>d.data.src==='網站新報名'||d.data.group==='網站新報名');const invRep=inv.filter(d=>!invNew.includes(d)&&(d.data.reply||d.data.count||d.data.names||d.data.webGift));
+  const sentCards=cards&&cards.list?cards.list.filter(x=>x.sent).length:0;const ticks=chk?Object.values(chk).filter(Boolean).length:0;
+  const O=[
+    {k:'web',on:true,t:`網站報名 ${webLive.length} 筆`,d:'全部隱藏，不列入統計與匯出。Google 試算表原始紀錄不動，之後也能在「報名與贊助」逐筆復原。',n:webLive.length},
+    {k:'gifts',on:true,t:`贊助品 ${gifts.length} 筆`,d:'報名與贊助頁的贊助品清單（含已收到的勾選）。',n:gifts.length},
+    {k:'seat',on:true,t:`座位系統：名單 ${sp.length} 人、${st.length} 桌、報到 ${arr.length} 筆`,d:'清空座位名單、桌次與報到紀錄，回到空白場地圖。',n:sp.length+sg.length+st.length+arr.length},
+    {k:'lot',on:true,t:'抽獎排序',d:'抽獎順序、價值、頒獎人的設定。',n:lot?1:0},
+    {k:'inv',on:false,t:`邀請名冊的回覆：${invRep.length} 筆回覆、${invNew.length} 筆「網站新報名」`,d:'清掉出席回覆、人數、名單；刪除名冊外的「網站新報名」。老闆確認與已發送不會動。',n:invRep.length+invNew.length},
+    {k:'cards',on:false,t:`紙本邀請卡的「已寄出」勾選 ${sentCards} 筆`,d:'只取消勾選，名單和地址不動。',n:sentCards},
+    {k:'ticks',on:false,t:`流程表與當天清單的打勾 ${ticks} 項`,d:'只取消打勾，流程表內容不動。',n:ticks}];
+  const dlg=$('rDlg');const close=()=>{$('rOvl').hidden=true;};
+  const step1=()=>{dlg.innerHTML=`<h4 id="rTitle">清除測試資料</h4><p style="margin:0;color:var(--ink-2)">勾選要清除的項目。預設只勾測試時最常用到的部分。</p>
+    ${O.map(o=>`<label class="o"><input type="checkbox" data-rk="${o.k}" ${o.on&&o.n?'checked':''} ${o.n?'':'disabled'}><span><b>${o.t}</b><small>${o.n?o.d:'目前沒有資料'}</small></span></label>`).join('')}
+    <div class="acts"><button id="rC">取消</button><button class="danger" id="rNext">下一步</button></div>`;
+    $('rC').onclick=close;$('rNext').onclick=()=>{const pick=O.filter(o=>dlg.querySelector(`[data-rk="${o.k}"]`).checked);if(!pick.length){toast('請至少勾選一項');return;}step2(pick);};};
+  const step2=pick=>{dlg.innerHTML=`<h4 id="rTitle">⚠️ 再確認一次</h4>
+    <div class="warnbox">確定要清除以下資料嗎？<ul>${pick.map(o=>`<li>${o.t}</li>`).join('')}</ul></div>
+    <p style="margin:0;font-size:15px;color:var(--ink-2)">按下「確定清除」會先自動下載一份備份檔（冠成尾牙_清除前備份.json），然後才清除。除了網站報名可以復原，其他資料清除後無法自動還原。其他電腦或手機若開著座位系統，請先關掉。</p>
+    <div class="acts"><button id="rBack">← 回上一步</button><button id="rC2">取消</button><button class="danger solid" id="rGo">確定清除</button></div>`;
+    $('rBack').onclick=step1;$('rC2').onclick=close;$('rGo').onclick=()=>run(pick);};
+  const run=async pick=>{const P=new Set(pick.map(o=>o.k));const g=$('rGo');g.disabled=true;g.textContent='清除中…';
+    try{
+      const backup={at:new Date().toISOString(),invites:inv,gifts,sp,sg,st,arrive:arr,webfix:fix,lottery:lot,check:chk,cards,meta,seatingState:seatOld};
+      const dl=await claude.use('downloads');await dl.save({filename:'冠成尾牙_清除前備份_'+new Date().toLocaleDateString('sv-SE')+'.json',data:JSON.stringify(backup,null,1)});
+      const W=[];
+      if(P.has('web')){const nf={...FX};webKeys.forEach(k=>{nf[k]={...(nf[k]||{}),hide:true,at:Date.now(),by:'清除測試資料'};});W.push(DB.doc('config/webfix').set({fix:nf}));}
+      if(P.has('gifts'))gifts.forEach(d=>W.push(DB.collection('gifts').doc(d.id).delete()));
+      if(P.has('seat')){[['sp',sp],['sg',sg],['st',st],['arrive',arr]].forEach(([c,L])=>L.forEach(d=>W.push(DB.collection(c).doc(d.id).delete())));
+        if(seatOld)W.push(DB.doc('seating/state').delete());W.push(DB.doc('meta/main').set({...(meta||{}),cap:(meta&&meta.cap)||10,resetAt:Date.now()}));}
+      if(P.has('lot')&&lot)W.push(DB.doc('flow/lottery').delete());
+      if(P.has('inv')){invNew.forEach(d=>W.push(DB.collection('invites').doc(d.id).delete()));
+        invRep.forEach(d=>W.push(DB.collection('invites').doc(d.id).set({...d.data,reply:'',count:null,names:'',veg:0,webGift:''})));}
+      if(P.has('cards')&&cards)W.push(DB.doc('flow/cards').set({...cards,list:cards.list.map(x=>({...x,sent:false,sentAt:''}))}));
+      if(P.has('ticks')&&chk)W.push(DB.doc('check/flow').set({}));
+      await Promise.all(W);
+      dlg.innerHTML=`<h4 id="rTitle">✓ 已清除</h4><p style="margin:0">已清除 ${pick.length} 項，備份檔已下載。各頁面重新整理後就會看到乾淨的資料。</p><div class="acts"><button class="btn primary" id="rDone">好</button></div>`;$('rDone').onclick=()=>{close();location.reload();};
+    }catch(e){g.disabled=false;g.textContent='確定清除';toast('清除失敗，請檢查網路後再試');}};
+  step1();$('rOvl').hidden=false;
+  }finally{b.disabled=false;b.textContent='🧹 清除測試資料';}};
+$('rOvl').addEventListener('click',e=>{if(e.target===$('rOvl'))$('rOvl').hidden=true;});
+
 $('copy').onclick=async()=>{try{await navigator.clipboard.writeText('https://leanna0303.github.io/guancheng-weiya/invite2.html?v=3');toast('已複製報名網址');}catch(_){toast('請手動複製：https://leanna0303.github.io/guancheng-weiya/invite2.html?v=3');}};
 (async()=>{const db=await claude.use('db');DB=db;
   db.doc('flow/main').onSnapshot(s=>{FLOW=s.exists?s.data():null;fixFlow();renderFlow();});
