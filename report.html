@@ -276,7 +276,13 @@ $('bAddGift').onclick=()=>{$('dlg').innerHTML=`<h3>新增贊助</h3><p class="no
     try{await db.collection('gifts').doc(id).set(d);toast('已新增');}catch(_){toast('儲存失敗');}};};
 
 // ---------- 年度總結 Excel ----------
+const READY=new Set();const need=['invites','gifts','sp','sg','st','arrive','config','web'];
+const allReady=()=>need.every(k=>READY.has(k));
 $('bXlsx').onclick=async()=>{if(typeof ExcelJS==='undefined'){toast('Excel 元件載入失敗，請重新整理');return;}
+  // wait until every list has loaded, otherwise the file comes out empty
+  if(!allReady()){const b=$('bXlsx'),t=b.textContent;b.disabled=true;b.textContent='資料載入中…';
+    for(let k=0;k<60&&!allReady();k++)await new Promise(r=>setTimeout(r,500));
+    b.disabled=false;b.textContent=t;if(!allReady()){toast('資料還沒載入完成，請確認已輸入通關密碼、網路正常後再按一次');return;}}
   const s=stats();const wb=new ExcelJS.Workbook();wb.creator='冠成尾牙';
   const red='FF7A1520',pale='FFF4E7CB';
   const sheet=(name,cols,rows,opt={})=>{const ws=wb.addWorksheet(name,{views:[{state:'frozen',ySplit:1}]});ws.columns=cols.map(([h,w])=>({header:h,width:w}));
@@ -317,14 +323,14 @@ $('bXlsx').onclick=async()=>{if(typeof ExcelJS==='undefined'){toast('Excel 元�
 
 render();
 (async()=>{db=await claude.use('db');
-  db.collection('invites').onSnapshot(q=>{INV=q.docs.map(d=>({...d.data(),id:d.id})).map(i=>i.group==='協力廠商'?{...i,group:'協力廠商/同行'}:i);render();});
-  db.collection('gifts').onSnapshot(q=>{GIFTS=new Map(q.docs.map(d=>[d.id,{...d.data()}]));giftsLoaded=true;render();});
-  db.collection('sp').onSnapshot(q=>{SP=q.docs.map(d=>({...d.data(),id:d.id}));});
-  db.collection('sg').onSnapshot(q=>{SG=q.docs.map(d=>({...d.data(),id:d.id}));});
-  db.collection('st').onSnapshot(q=>{ST=q.docs.map(d=>({...d.data(),id:d.id}));});
-  db.collection('arrive').onSnapshot(q=>{ARR=q.docs.map(d=>({...d.data(),id:d.id}));});
-  db.doc('config/event').onSnapshot(s=>{CFG=s.exists?s.data():{};});
-  const loadWeb=async()=>{try{const j=await window.__kcCall({op:'web'});WEB=j.rows||[];webAt=new Date();render();await new Promise(r=>setTimeout(r,1500));await syncWebGifts();render();}catch(_){toast('讀不到網站報名資料，稍後會再試');}};
+  db.collection('invites').onSnapshot(q=>{READY.add('invites');INV=q.docs.map(d=>({...d.data(),id:d.id})).map(i=>i.group==='協力廠商'?{...i,group:'協力廠商/同行'}:i);render();});
+  db.collection('gifts').onSnapshot(q=>{READY.add('gifts');GIFTS=new Map(q.docs.map(d=>[d.id,{...d.data()}]));giftsLoaded=true;render();});
+  db.collection('sp').onSnapshot(q=>{READY.add('sp');SP=q.docs.map(d=>({...d.data(),id:d.id}));});
+  db.collection('sg').onSnapshot(q=>{READY.add('sg');SG=q.docs.map(d=>({...d.data(),id:d.id}));});
+  db.collection('st').onSnapshot(q=>{READY.add('st');ST=q.docs.map(d=>({...d.data(),id:d.id}));});
+  db.collection('arrive').onSnapshot(q=>{READY.add('arrive');ARR=q.docs.map(d=>({...d.data(),id:d.id}));});
+  db.doc('config/event').onSnapshot(s=>{READY.add('config');CFG=s.exists?s.data():{};});
+  const loadWeb=async()=>{try{const j=await window.__kcCall({op:'web'});WEB=j.rows||[];READY.add('web');webAt=new Date();render();await new Promise(r=>setTimeout(r,1500));await syncWebGifts();render();}catch(_){READY.add('web');toast('讀不到網站報名資料，稍後會再試');}};
   await loadWeb();setInterval(loadWeb,60000);
 })();
 })();
