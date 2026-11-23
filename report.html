@@ -196,7 +196,7 @@ td b{font-family:var(--display)}
 <main class="wrap">
   <div class="bar">
     <div class="tabs" role="tablist" id="tabs"></div>
-    <div class="acts"><button id="bAddReg">＋ 手動報名</button><button id="bAddGift">＋ 新增贊助</button><button class="primary" id="bXlsx">匯出年度總結 Excel</button></div>
+    <div class="acts"><button id="bAddReg" title="電話、LINE、口頭說要來吃尾牙的；有贊助也可以一起填">＋ 手動報名（出席）</button><button id="bAddGift" title="只答應贊助、不需要登記出席的">＋ 只登記贊助</button><button class="primary" id="bXlsx">匯出年度總結 Excel</button></div>
   </div>
   <div id="view"></div>
 </main>
@@ -246,7 +246,7 @@ function webView(s){if(!s.recs.length)return '<div class="tw"><div class="empty"
    <td class="n">${r.veg||''}</td><td class="n">${r.nobeef||''}</td><td class="n">${r.child||''}</td><td class="sm2">${esc(r.gifts.join('；'))}</td><td class="sm2">${esc(r.note)}</td><td style="white-space:nowrap">${r.ed?'<span class="pill" style="background:var(--gold-pale);color:var(--gold)">已修改</span> ':''}<button class="ghost" data-wedit="${r.k}">✏️ 編輯</button></td></tr>`).join('')}</tbody></table></div>${hidList()}`;}
 function hidList(){const h=WEB.filter(r=>FIX[wkey(r)]&&FIX[wkey(r)].hide);if(!h.length)return'';return `<p class="note" style="margin:0">已隱藏 ${h.length} 筆（不列入統計和匯出）：${h.map(r=>`${esc(H(r,/公司|單位名稱/)||H(r,/貴姓|填表人/))}（${esc(H(r,/時間戳記/))}）<button class="ghost" data-wshow="${wkey(r)}">復原</button>`).join('　')}</p>`;}
 function giftView(s){const gl=s.gl;
-  return `<p class="note" style="margin:0">網站上填的贊助品會自動列進來；電話或當面答應的請按「＋ 新增贊助」。東西收到後勾「已收到」。</p>
+  return `<p class="note" style="margin:0">網站上填的贊助品會自動列進來；電話或當面答應的：要出席的按「＋ 手動報名（出席）」一起填，只贊助的按「＋ 只登記贊助」。東西收到後勾「已收到」。</p>
   <div class="tw">${gl.length?`<table><thead><tr><th>單位</th><th>贊助品</th><th>預計交付</th><th>已收到</th><th>備註</th><th>去年贊助</th><th></th></tr></thead><tbody>
   ${gl.map(g=>{const inv=invFor(g.unit);return `<tr><td><b>${esc(g.unit)}</b>${g.person?`<div class="mt">${esc(g.person)}</div>`:''}<div class="mt">${esc(g.src||'')}</div></td><td>${esc(g.item)}</td><td class="sm2" style="white-space:nowrap">${esc(g.due)}</td>
    <td><label class="chk"><input type="checkbox" data-recv="${g.id}" ${g.received?'checked':''}>${g.received?'已收到':'未收到'}</label></td>
@@ -273,7 +273,7 @@ document.addEventListener('change',async e=>{const t=e.target;
   if(t.dataset.recv){const g=GIFTS.get(t.dataset.recv);g.received=t.checked;g.recvAt=t.checked?new Date().toLocaleDateString('sv-SE'):'';render();try{await db.collection('gifts').doc(t.dataset.recv).set(g);}catch(_){toast('儲存失敗');}}
   if(t.dataset.note){const g=GIFTS.get(t.dataset.note);g.note=S_(t.value);try{await db.collection('gifts').doc(t.dataset.note).set(g);toast('已儲存備註');}catch(_){toast('儲存失敗');}}});
 $('ovl').addEventListener('click',e=>{if(e.target===$('ovl'))$('ovl').hidden=true;});
-$('bAddGift').onclick=()=>{$('dlg').innerHTML=`<h3>新增贊助</h3><p class="note" style="margin:-4px 0 0">電話、LINE 或當面答應的贊助，例如「大中華董事長　現金 6000」。</p>
+$('bAddGift').onclick=()=>{$('dlg').innerHTML=`<h3>只登記贊助</h3><p class="note" style="margin:-4px 0 0">只答應贊助、不用登記出席的，例如「大中華董事長　現金 6000」。如果對方也要出席，請改用「手動報名（出席）」一起填。</p>
   <div class="f"><label for="g_u">單位</label><input id="g_u" list="units"></div><datalist id="units">${INV.map(i=>`<option value="${esc(i.unit)}">`).join('')}</datalist>
   <div class="f"><label for="g_i">贊助品</label><input id="g_i" placeholder="例：國際牌微波爐 ×1、現金 6000"></div>
   <div class="f"><label for="g_d">預計交付</label><input id="g_d" placeholder="例：1/10 前送到店裡"></div>
@@ -333,7 +333,7 @@ document.addEventListener('click',e=>{if(!e.target.closest('#wishShow'))return;
 const MANH={unit:'公司/單位名稱',cat:'類別',person:'貴姓',title:'職稱',attend:'是否出席',count:'總參加人數',names:'參加人員名單',veg:'素食人數',nobeef:'不吃牛人數',child:'兒童椅',gifts:'贊助獎品（一）',due:'贊助品交付日',note:'其他需求',wish:'祝賀詞'};
 const CATS=['廠商','同行','學校／教育界','社團','政府機關／民代','貴賓','親友','朋友','其他'];
 $('bAddReg').onclick=()=>{
-  $('dlg').innerHTML=`<h3>手動報名</h3><p class="note" style="margin:-4px 0 0">電話、LINE 或當面口頭報名的，填在這裡就跟網站報名一樣算進統計、名冊同步與匯出。</p>
+  $('dlg').innerHTML=`<h3>手動報名（出席）</h3><p class="note" style="margin:-4px 0 0">電話、LINE 或當面說要來的，填在這裡就跟網站報名一樣算進統計、名冊同步與匯出。有贊助就填在「贊助品」，不用再按「只登記贊助」。</p>
    <div style="display:flex;flex-direction:column;gap:8px;max-height:min(62vh,580px);overflow:auto;padding-right:4px">
    <div class="f"><label for="m_unit">單位（必填）</label><input id="m_unit" placeholder="例如：聲寶、和美鎮公所"></div>
    <div class="f"><label for="m_cat">類別</label><select id="m_cat">${CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>

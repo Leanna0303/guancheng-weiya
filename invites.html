@@ -340,6 +340,7 @@ table.lg{width:100%;border-collapse:collapse;font-size:15.9px;min-width:980px}
       <div class="search"><input id="q" type="search" placeholder="搜尋單位或人名" aria-label="搜尋單位或人名"></div>
       <button class="primary" id="bBoss" data-w>確認名單</button>
       <button id="bAdd" data-w>＋ 新增邀請</button>
+      <button id="bRemind" data-w>📣 一鍵催回覆</button>
       <button id="bWeb" data-w>同步網站報名</button>
       <button id="bExport">匯出出席名單</button>
       <button id="bPrintA">列印 A4</button>
@@ -365,7 +366,7 @@ const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const S_=v=>String(v??'').trim();
 const GROUPS=['廠商','外包師傅','協力廠商/同行','政商','教育界','廠牌高層','社團親友','柏緯朋友','員工','公益','其他貴賓','網站新報名'];
-const DEF_CFG={date:'116 年 1 月（日期確認中）',time:'下午 5:50 入席，6:00 準時開始',venue:'大中華國際美食館（彰化縣和美鎮彰美路四段 306 號）',site:'https://leanna0303.github.io/guancheng-weiya/',deadline:'',sender:'冠成家電'};
+const DEF_CFG={date:'116 年 1 月（日期確認中）',time:'下午 5:50 入席，6:00 準時開始',venue:'大中華國際美食館（彰化縣和美鎮彰美路四段 306 號）',site:'https://leanna0303.github.io/guancheng-weiya/invite2.html?v=3',deadline:'',sender:'冠成家電'};
 let db=null,sample=null,dl=null,canWrite=true,live=false;
 let INV=new Map(),CFG={...DEF_CFG};
 let filt='all',fgSel='',bossOpen=false,bossAll=false;
@@ -817,6 +818,29 @@ $('bBoss').onclick=()=>{bossOpen=true;$('boss').hidden=false;renderBoss();};
 $('bAdd').onclick=()=>editDlg(null);
 $('bPrintA').onclick=printDlg;
 $('bSet').onclick=setDlg;
+// ---------- 一鍵催回覆：所有已發出、還沒回覆的單位 ----------
+$('bRemind').onclick=()=>{
+  const L=[...INV.values()].filter(i=>stage(i)==='wait').sort((a,b)=>(days(b.sentAt)??0)-(days(a.sentAt)??0));
+  if(!L.length){toast('目前沒有等回覆的單位 👍');return;}
+  const row=i=>`<div class="rm" data-id="${i.id}" style="border:1px solid var(--hair);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px">
+     <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline"><b>${esc(i.unit)}</b><span class="muted" style="font-size:13.5px">${esc(i.contact||'')}　·　發出 ${days(i.sentAt)??'?'} 天　·　已催 ${(i.reminders||[]).length} 次${(i.reminders||[]).length?`（上次 ${esc((i.reminders||[]).slice(-1)[0])}）`:''}</span></div>
+     <textarea class="msgbox" style="min-height:120px">${esc(tmpl(i,'remind'))}</textarea>
+     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button data-rmcopy>複製</button><button class="ok" data-rmdone>複製並記錄已催</button></div></div>`;
+  const list=L.map(i=>`・${i.unit}${i.contact?`（${i.contact}）`:''}　發出 ${days(i.sentAt)??'?'} 天、已催 ${(i.reminders||[]).length} 次`).join('\n');
+  openDlg(`<h3>📣 一鍵催回覆（${L.length} 個單位）</h3>
+   <p class="sub">每個單位的提醒訊息都寫好了，可以直接修改。按「複製」貼到 LINE 傳給對方，傳完按「複製並記錄已催」，名冊會記下催過的日期。發出比較久的排在前面。</p>
+   <details style="margin:-2px 0 4px"><summary style="cursor:pointer;color:var(--muted)">內部用：未回覆名單（可貼到同事群組分工）</summary><textarea id="rmList" class="msgbox" style="min-height:120px">${esc(`還沒回覆的單位（${L.length}）：\n`+list)}</textarea><div style="text-align:right;margin-top:6px"><button id="rmListCopy">複製名單</button></div></details>
+   <div style="display:flex;flex-direction:column;gap:10px;max-height:min(58vh,620px);overflow:auto;padding-right:4px">${L.map(row).join('')}</div>
+   <div class="acts" style="display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap"><button class="ghost" id="rmAll">全部標記已催（今天）</button><button id="dCancel">關閉</button></div>`);
+  $('dCancel').onclick=closeDlg;
+  const cp=async t=>{try{await navigator.clipboard.writeText(t);toast('已複製，貼到 LINE 就可以了');}catch(_){toast('請手動選取後按 Ctrl+C');}};
+  $('rmListCopy').onclick=()=>cp($('rmList').value);
+  document.querySelectorAll('.rm').forEach(box=>{const i=INV.get(box.dataset.id);const ta=box.querySelector('textarea');
+    box.querySelector('[data-rmcopy]').onclick=()=>cp(ta.value);
+    box.querySelector('[data-rmdone]').onclick=async e=>{await cp(ta.value);const x=clone(i);x.reminders=(x.reminders||[]).concat(today());e.target.disabled=true;e.target.textContent='✓ 已記錄';box.style.opacity='.55';await save(x);};});
+  $('rmAll').onclick=async e=>{const b=e.target;if(!b.dataset.arm){b.dataset.arm=1;b.textContent=`確定把 ${L.length} 個單位都記為今天已催？再按一次`;return;}
+    b.disabled=true;for(const i of L){const x=clone(INV.get(i.id)||i);x.reminders=(x.reminders||[]).concat(today());await save(x);}closeDlg();toast(`已記錄 ${L.length} 個單位今天已催`);};
+};
 async function webRows(){const j=await window.__kcCall({op:'web'});let rows=j.rows||[];
   try{const m=await (await claude.use('db')).doc('config/manual').get();if(m.exists&&m.data().list)rows=rows.concat(m.data().list);}catch(_){}
   // apply corrections made on the 報名與贊助 page (config/webfix)
@@ -842,7 +866,7 @@ render();
   if(!db){$('noDb').hidden=false;live=true;render();return;}
   db.collection('invites').onSnapshot(snap=>{const m=new Map();snap.docs.forEach(d=>{const old=INV.get(d.id);m.set(d.id,{...d.data(),...(d.data().group==='協力廠商'?{group:'協力廠商/同行'}:{}),id:d.id,...(old&&old._justDecided?{_justDecided:true}:{})});});INV=m;live=true;render();checkWeb();},
     e=>{toast('資料連線中斷，請重新整理頁面');});
-  db.doc('config/event').onSnapshot(s=>{CFG={...DEF_CFG,...(s.exists?s.data():{})};},()=>{});
+  db.doc('config/event').onSnapshot(s=>{CFG={...DEF_CFG,...(s.exists?s.data():{})};if(!CFG.site||/guancheng-weiya\/?(index\.html)?$/.test(CFG.site))CFG.site=DEF_CFG.site;},()=>{});
 })();
 })();
 </script>
