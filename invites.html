@@ -244,6 +244,10 @@ table.lg{width:100%;border-collapse:collapse;font-size:15.9px;min-width:980px}
 .lg tbody tr:hover td{background:color-mix(in srgb,var(--gold-pale) 40%,var(--sheet))}
 .lg .u b{font-family:var(--display);font-size:17.7px}
 .lg .u .tag{margin-left:4px}
+.mv{display:inline-flex;gap:3px;margin-right:8px;vertical-align:middle}
+.mv button{min-height:32px;min-width:32px;padding:0 6px;font-size:15px;border-radius:8px}
+#ordBtn.on{background:var(--lacquer);border-color:var(--lacquer);color:var(--on-lacquer)}
+tr.ordr td{background:color-mix(in srgb,var(--gold-pale) 25%,var(--sheet))}
 .lg .n{font-family:var(--num);font-size:20.9px;font-weight:600;text-align:center;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1;white-space:nowrap}
 .lg .sm{font-size:14.8px;color:var(--ink-2)}
 .lg .mt{font-size:14.2px;color:var(--muted)}
@@ -358,7 +362,7 @@ table.lg{width:100%;border-collapse:collapse;font-size:15.9px;min-width:980px}
     </div>
     <div class="cats" id="chips" role="group" aria-label="分類"></div>
     <div class="ctl2"><div class="legend"><span><i style="background:var(--gold-line)"></i>待老闆確認</span><span><i style="background:var(--ink-2);opacity:.35"></i>待發送</span><span><i style="background:var(--warn)"></i>等回覆</span><span><i style="background:var(--ok)"></i>已回覆</span></div>
-      <button class="ghost" id="allStages" data-filt="all" hidden>× 顯示全部進度</button><div class="vt" role="group" aria-label="顯示方式"><button id="vTable">表格</button><button id="vCard">卡片</button></div></div>
+      <button class="ghost" id="allStages" data-filt="all" hidden>× 顯示全部進度</button><button id="ordBtn" data-w>↕ 調整順序</button><div class="vt" role="group" aria-label="顯示方式"><button id="vTable">表格</button><button id="vCard">卡片</button></div></div>
   </div>
 
   <div id="list"></div>
@@ -377,6 +381,8 @@ const DEF_CFG={date:'116 年 1 月（日期確認中）',time:'下午 5:50 入�
 let db=null,sample=null,dl=null,canWrite=true,live=false;
 let INV=new Map(),CFG={...DEF_CFG};
 let filt='all',fgSel='',bossOpen=false,bossAll=false;
+const ordCmp=(a,b)=>((a.ord??1e9)-(b.ord??1e9))||a.id.localeCompare(b.id);
+let ordMode=false;
 let viewMode=(()=>{try{const v=localStorage.getItem('kc-inv-view');if(v)return v;}catch(_){}return matchMedia('(min-width:900px)').matches?'table':'card';})();
 
 // ---------- stage ----------
@@ -422,7 +428,7 @@ function render(){
   const shown=all.filter(i=>(filt==='all'?stage(i)!=='skip':stage(i)===filt)&&(!fg||i.group===fg)&&(!q||[i.unit,i.contact,i.names,i.lyNames].join(' ').toLowerCase().includes(q)));
   const byG=new Map();shown.forEach(i=>{if(!byG.has(i.group))byG.set(i.group,[]);byG.get(i.group).push(i);});
   const order=[...byG.keys()].sort((a,b)=>(GROUPS.indexOf(a)+99)%99-(GROUPS.indexOf(b)+99)%99);
-  $('list').innerHTML=order.length?order.map(g=>{const its=byG.get(g).sort((a,b)=>a.id.localeCompare(b.id));
+  $('list').innerHTML=order.length?order.map(g=>{const its=byG.get(g).sort(ordCmp);
     const ppl=its.filter(i=>!i.merge&&i.reply==='yes').reduce((a,i)=>a+people(i),0),ly=its.reduce((a,i)=>a+(Number(i.lyCount)||0),0);
     const head=`<h2>${esc(g)}<span>${its.length} 筆${ly?`・去年 ${ly} 位`:''}${ppl?`・今年確定 ${ppl} 位`:''}</span></h2>`;
     return viewMode==='table'?`<section class="grp">${head}<div class="tw"><table class="lg"><thead><tr><th style="width:21%">單位</th><th style="width:15%">邀請對象</th><th style="width:5%;text-align:center">去年</th><th style="width:18%">去年贊助／備註</th><th style="width:19%">今年進度</th><th style="text-align:right">操作</th></tr></thead><tbody>${its.map(trHTML).join('')}</tbody></table></div></section>`
@@ -448,18 +454,18 @@ function parts(i){const st=stage(i);const w=canWrite;
     acts=w&&!i.merge?`<button class="ghost" data-reply="${i.id}">修改回覆</button>`:'';}
   return {st,state,acts,w};}
 function rowHTML(i){const {st,state,acts,w}=parts(i);
-  return `<div class="row"><div class="who"><div class="u"><b>${esc(i.unit)}</b>${i.brand?`<span class="tag" style="border-color:var(--gold-line);color:var(--gold)">${esc(i.brand)}</span>`:''}${i.src==='網站報名'||i.src==='網站新報名'?'<span class="tag new">網站報名</span>':''}${i.channel&&st!=='send'?`<span class="tag">${esc(i.channel)}</span>`:''}</div>${i.contact?`<div class="ct">${esc(i.contact)}</div>`:''}${lyHTML(i)?`<div class="ly">${lyHTML(i)}</div>`:''}</div>
+  return `<div class="row"><div class="who"><div class="u">${ordMode&&canWrite?`<span class="mv"><button data-mv="top" data-mid="${i.id}" title="移到這類最前面" aria-label="移到最前面">⤒</button><button data-mv="-1" data-mid="${i.id}" aria-label="往上">↑</button><button data-mv="1" data-mid="${i.id}" aria-label="往下">↓</button><button data-mv="end" data-mid="${i.id}" title="移到這類最後面" aria-label="移到最後面">⤓</button></span>`:''}<b>${esc(i.unit)}</b>${i.brand?`<span class="tag" style="border-color:var(--gold-line);color:var(--gold)">${esc(i.brand)}</span>`:''}${i.src==='網站報名'||i.src==='網站新報名'?'<span class="tag new">網站報名</span>':''}${i.channel&&st!=='send'?`<span class="tag">${esc(i.channel)}</span>`:''}</div>${i.contact?`<div class="ct">${esc(i.contact)}</div>`:''}${lyHTML(i)?`<div class="ly">${lyHTML(i)}</div>`:''}</div>
    <div class="state">${state.includes('class="line"')?state:`<div class="line">${state}</div>`}</div><div class="acts">${acts}${w?`<button class="ghost" data-edit="${i.id}" aria-label="編輯 ${esc(i.unit)}">編輯</button>`:''}</div></div>`;}
 
 function trHTML(i){const {st,state,acts,w}=parts(i);
   const ly2=[i.lyGift?`<div class="sm">${esc(i.lyGift)}</div>`:'',i.lyNote?`<div class="mt">${esc(i.lyNote)}</div>`:''].join('');
-  return `<tr><td class="u"><b>${esc(i.unit)}</b>${i.brand?`<span class="tag" style="border-color:var(--gold-line);color:var(--gold)">${esc(i.brand)}</span>`:''}${i.src==='網站報名'||i.src==='網站新報名'?'<span class="tag new">網站</span>':''}${i.channel?`<span class="tag">${esc(i.channel)}</span>`:''}</td>
+  return `<tr${ordMode?' class="ordr"':''}><td class="u">${ordMode&&canWrite?`<span class="mv"><button data-mv="top" data-mid="${i.id}" title="移到這類最前面" aria-label="移到最前面">⤒</button><button data-mv="-1" data-mid="${i.id}" aria-label="往上">↑</button><button data-mv="1" data-mid="${i.id}" aria-label="往下">↓</button><button data-mv="end" data-mid="${i.id}" title="移到這類最後面" aria-label="移到最後面">⤓</button></span>`:''}<b>${esc(i.unit)}</b>${i.brand?`<span class="tag" style="border-color:var(--gold-line);color:var(--gold)">${esc(i.brand)}</span>`:''}${i.src==='網站報名'||i.src==='網站新報名'?'<span class="tag new">網站</span>':''}${i.channel?`<span class="tag">${esc(i.channel)}</span>`:''}</td>
    <td class="sm">${esc(i.contact)}</td><td class="n">${i.lyCount!=null?i.lyCount:'<span class="mt">—</span>'}</td><td>${ly2||'<span class="mt">—</span>'}</td>
    <td class="state">${state.includes('class="line"')?state:`<div class="line">${state}</div>`}</td>
    <td class="ac">${acts}${w?`<button class="ghost" data-edit="${i.id}" aria-label="編輯 ${esc(i.unit)}">編輯</button>`:''}</td></tr>`;}
 // ---------- boss mode ----------
 function renderBoss(){
-  const all=[...INV.values()].filter(i=>bossAll||stage(i)==='boss'||i._justDecided);
+  const all=[...INV.values()].filter(i=>bossAll||stage(i)==='boss'||i._justDecided).sort(ordCmp);
   const byG=new Map();all.forEach(i=>{if(!byG.has(i.group))byG.set(i.group,[]);byG.get(i.group).push(i);});
   const pending=[...INV.values()].filter(i=>stage(i)==='boss').length;
   const order=[...byG.keys()].sort((a,b)=>(GROUPS.indexOf(a)+99)%99-(GROUPS.indexOf(b)+99)%99);
@@ -494,7 +500,7 @@ function printDlg(){
 function registerHTML(list,o){
   const D=o.size!=='big';
   const MC=!o.names&&!o.gift&&!o.note;const NC=o.orient==='landscape'?3:2;
-  const byG=new Map();list.sort((a,b)=>a.id.localeCompare(b.id)).forEach(i=>{if(!byG.has(i.group))byG.set(i.group,[]);byG.get(i.group).push(i);});
+  const byG=new Map();list.sort(ordCmp).forEach(i=>{if(!byG.has(i.group))byG.set(i.group,[]);byG.get(i.group).push(i);});
   const order=[...byG.keys()].sort((a,b)=>(GROUPS.indexOf(a)+99)%99-(GROUPS.indexOf(b)+99)%99);
   const lyTotal=list.reduce((a,i)=>a+(Number(i.lyCount)||0),0);
   const status=i=>i.boss==='yes'?'邀請':i.boss==='no'?'不邀':'';
@@ -756,7 +762,7 @@ $('bXlsx').onclick=async()=>{
   const FILL={boss:'FFF4E7CB',send:'FFEFEAE2',wait:'FFF8E3D3',replied:'FFE3EFE6',skip:'FFF2F0EC'};
   const FONT={boss:'FF8A6420',send:'FF5C514A',wait:'FFB5541B',replied:'FF2F6F4A',skip:'FF9E9084'};
   const red='FF7A1520',gold='FFD9BF8A',pale='FFF9F4EA',hair={style:'thin',color:{argb:'FFE6DACA'}};
-  const all=[...INV.values()].sort((a,b)=>(GROUPS.indexOf(a.group)+99)%99-(GROUPS.indexOf(b.group)+99)%99||a.id.localeCompare(b.id));
+  const all=[...INV.values()].sort((a,b)=>(GROUPS.indexOf(a.group)+99)%99-(GROUPS.indexOf(b.group)+99)%99||ordCmp(a,b));
   const wb=new ExcelJS.Workbook();wb.creator='冠成尾牙';
   const evt=CFG.date||'';const stamp=new Date().toLocaleString('zh-TW',{year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
   const title=(ws,text,span)=>{ws.mergeCells(1,1,1,span);const c=ws.getCell(1,1);c.value=text;c.font={name:'微軟正黑體',size:16,bold:true,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:red}};c.alignment={vertical:'middle',indent:1};ws.getRow(1).height=34;
@@ -820,6 +826,18 @@ document.addEventListener('click',async e=>{const t=e.target.closest('button');i
   if(t.dataset.msg&&i){msgDlg(i,t.dataset.k);return;}
 });
 $('q').addEventListener('input',render);
+$('ordBtn').onclick=()=>{ordMode=!ordMode;$('ordBtn').classList.toggle('on',ordMode);$('ordBtn').textContent=ordMode?'✓ 完成排序':'↕ 調整順序';if(ordMode)toast('用 ⤒ ↑ ↓ ⤓ 調整同一類裡的順序，會自動儲存；列印、Excel 也照這個順序');render();};
+async function moveInv(id,how){const me=INV.get(id);if(!me)return;
+  const grp=[...INV.values()].filter(i=>i.group===me.group).sort(ordCmp);const k=grp.findIndex(i=>i.id===id);
+  const to=how==='top'?0:how==='end'?grp.length-1:Math.max(0,Math.min(grp.length-1,k+Number(how)));if(to===k)return;
+  grp.splice(k,1);grp.splice(to,0,me);
+  grp.forEach((x,n)=>{const o=(n+1)*10;if(x.ord!==o){const y=clone(x);y.ord=o;INV.set(y.id,y);ordDirty.add(y.id);}});
+  render();clearTimeout(ordT);ordT=setTimeout(flushOrd,700);}
+// several quick moves are saved once, from the latest order on screen
+let ordT=null;const ordDirty=new Set();
+async function flushOrd(){if(!db)return;const vals=[...ordDirty].map(id=>INV.get(id)).filter(Boolean).map(x=>{const {_justDecided,...b}=x;b.updatedAt=Date.now();return b;});ordDirty.clear();
+  try{await Promise.all(vals.map(b=>db.collection('invites').doc(b.id).set(b)));}catch(_){vals.forEach(b=>ordDirty.add(b.id));toast('順序儲存失敗，請檢查網路');}}
+document.addEventListener('click',e=>{const b=e.target.closest('button[data-mv]');if(!b)return;e.stopPropagation();moveInv(b.dataset.mid,b.dataset.mv);},true);
 const setVM=v=>{viewMode=v;try{localStorage.setItem('kc-inv-view',v);}catch(_){}render();};$('vTable').onclick=()=>setVM('table');$('vCard').onclick=()=>setVM('card');
 $('bBoss').onclick=()=>{bossOpen=true;$('boss').hidden=false;renderBoss();};
 $('bAdd').onclick=()=>editDlg(null);
