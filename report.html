@@ -300,10 +300,18 @@ $('bXlsx').onclick=async()=>{if(typeof ExcelJS==='undefined'){toast('Excel 元�
   const gById=new Map(SG.map(g=>[g.id,g])),tById=new Map(ST.map(t=>[t.id,t])),arr=new Set(ARR.filter(a=>a.in).map(a=>a.id));
   const people=SP.length?SP.map(p=>{const g=gById.get(p.gid)||{};const t=tById.get(p.t);return[g.unit||'',g.catRaw||'',p.name,[p.veg?'素':'',p.nobeef?'不吃牛':'',p.child?'兒童椅':'',p.stage?'上台':'',p.mob?'行動不便':''].filter(Boolean).join('、'),t?t.no:'未安排',t?t.name||'':'',arr.has(p.id)?'✓':''];})
     :INV.filter(i=>!i.merge&&i.reply==='yes').flatMap(i=>splitN(i.names).map(n=>[i.unit,i.group,n.replace(/[（(].*?[)）]/g,'').trim(),(n.match(/[（(](.*?)[)）]/g)||[]).map(x=>x.slice(1,-1)).join('、'),'','','']));
-  sheet('出席名單',[['單位',24],['類別',10],['姓名',18],['需求',16],['桌號',8],['桌名',16],['報到',6]],people);
-  sheet('贊助品',[['單位',24],['贊助品',40],['預計交付',16],['已收到',8],['收到日',11],['備註',30],['來源',10]],s.gl.map(g=>[g.unit,g.item,g.due||'',g.received?'✓':'',g.recvAt||'',g.note||'',g.src||'']));
-  sheet('網站報名原始資料',[['報名時間',18],['單位',24],['類別',12],['填表人',14],['職稱',10],['出席',10],['人數',6],['名單',40],['素',5],['不吃牛',6],['兒童椅',6],['贊助品',30],['交付日',12],['其他需求',24],['祝賀詞',40]],
-    s.recs.map(r=>[r.ts,r.unit,r.cat,r.person,r.title,r.attend,r.count,r.names,r.veg,r.nobeef,r.child,r.gifts.join('；'),r.due,r.note,r.wish]));
+  // 出席、贊助、網站報名合在同一張表：每個單位一列
+  const U=new Map();const uu=(unit,cat)=>{const k=ukey(unit)||String(unit||'').trim()||'（未填單位）';if(!U.has(k))U.set(k,{unit:unit||'（未填單位）',cat:cat||'',ppl:[],tables:new Set(),inN:0,gifts:[],web:[]});const u=U.get(k);if(!u.cat&&cat)u.cat=cat;return u;};
+  people.forEach(p=>{const u=uu(p[0],p[1]);u.ppl.push(p[2]+(p[3]?`（${p[3]}）`:''));if(p[4]&&p[4]!=='未安排')u.tables.add(p[4]);if(p[6])u.inN++;});
+  s.gl.forEach(g=>{const u=uu(g.unit,'');u.gifts.push(g);});
+  s.recs.forEach(r=>{const u=uu(r.unit,r.cat);u.web.push(r);});
+  [...U.values()].forEach(u=>{if(!u.cat){const v=invFor(u.unit);if(v)u.cat=v.group;}});
+  const rows=[...U.values()].sort((a,b)=>String(a.cat).localeCompare(String(b.cat),'zh-Hant')||String(a.unit).localeCompare(String(b.unit),'zh-Hant')).map(u=>{const w=u.web[u.web.length-1]||{};
+    return[u.unit,u.cat,u.ppl.length||'',u.ppl.join('、'),[...u.tables].sort((a,b)=>a-b).join('、'),u.inN||'',
+      u.gifts.map(g=>g.item).join('；'),u.gifts.length?`${u.gifts.filter(g=>g.received).length}/${u.gifts.length}`:'',u.gifts.map(g=>g.due).filter(Boolean).join('；'),
+      u.web.map(r=>r.ts).join('；'),[w.person,w.title].filter(Boolean).join(' '),w.attend||'',w.count||'',w.note||'',u.web.map(r=>r.wish).filter(Boolean).join('；'),
+      u.gifts.map(g=>g.note).filter(Boolean).join('；')];});
+  sheet('出席、贊助與網站報名',[['單位',24],['類別',10],['出席人數',8],['出席名單（需求）',44],['桌號',10],['已報到',7],['贊助品',36],['已收到',8],['預計交付',14],['網站報名時間',18],['填表人',16],['網站回覆',10],['網站填的人數',8],['其他需求',24],['祝賀詞',36],['贊助備註',24]],rows);
   const buf=await wb.xlsx.writeBuffer();const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`冠成尾牙_年度總結_${(evt||'').replace(/\s/g,'')||new Date().toLocaleDateString('sv-SE')}.xlsx`;document.body.appendChild(a);a.click();a.remove();toast('已下載年度總結 Excel');};
 
