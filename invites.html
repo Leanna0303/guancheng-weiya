@@ -817,7 +817,12 @@ $('bBoss').onclick=()=>{bossOpen=true;$('boss').hidden=false;renderBoss();};
 $('bAdd').onclick=()=>editDlg(null);
 $('bPrintA').onclick=printDlg;
 $('bSet').onclick=setDlg;
-async function webRows(){const j=await window.__kcCall({op:'web'});return j.rows||[];}
+async function webRows(){const j=await window.__kcCall({op:'web'});const rows=j.rows||[];
+  // apply corrections made on the 報名與贊助 page (config/webfix)
+  let FX={};try{const d=await (await claude.use('db')).doc('config/webfix').get();FX=(d.exists&&d.data().fix)||{};}catch(_){}
+  const hs=s=>{let h=5381;for(const c of s)h=((h*33)^c.charCodeAt(0))>>>0;return h.toString(36);};
+  const ts=r=>{const k=Object.keys(r).find(h=>/時間戳記/.test(h));return k?String(r[k]??'').trim():'';};
+  return rows.map(r=>{const f=FX['w'+hs(ts(r)||JSON.stringify(r))];if(f&&f.hide)return null;return{...r,...((f&&f.set)||{})};}).filter(Boolean);}
 $('bWeb').onclick=async()=>{const b=$('bWeb');b.disabled=true;const t=b.textContent;b.textContent='讀取網站報名中…';
   try{await importRows(await webRows());}catch(_){toast('讀不到網站報名資料，請稍後再試');}finally{b.disabled=false;b.textContent='同步網站報名';}};
 let webChecked=false;async function checkWeb(){if(webChecked||!live||!INV.size)return;webChecked=true;

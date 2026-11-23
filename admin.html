@@ -432,7 +432,11 @@ $('copy').onclick=async()=>{try{await navigator.clipboard.writeText('https://lea
   db.collection('arrive').onSnapshot(q=>{ARR=q.docs.map(d=>d.data());render();});
   db.collection('gifts').onSnapshot(q=>{GIFT=q.docs.map(d=>d.data());render();});
   db.doc('config/event').onSnapshot(s=>{CFG=s.exists?s.data():{};render();renderFlow();});
-  try{const j=await window.__kcCall({op:'web'});WEB=(j.rows||[]).length;render();}catch(_){}
+  try{const j=await window.__kcCall({op:'web'});const rows=j.rows||[];
+    let FX={};try{const d=await db.doc('config/webfix').get();FX=(d.exists&&d.data().fix)||{};}catch(_){}
+    const hs=s=>{let h=5381;for(const c of s)h=((h*33)^c.charCodeAt(0))>>>0;return h.toString(36);};
+    const ts=r=>{const k=Object.keys(r).find(h=>/時間戳記/.test(h));return k?String(r[k]??'').trim():'';};
+    WEB=rows.filter(r=>{const f=FX['w'+hs(ts(r)||JSON.stringify(r))];return !(f&&f.hide);}).length;render();}catch(_){}
 })();
 })();
 </script>
