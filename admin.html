@@ -510,7 +510,7 @@ $('copy').onclick=async()=>{try{await navigator.clipboard.writeText('https://lea
 (async()=>{const db=await claude.use('db');DB=db;
   db.doc('flow/main').onSnapshot(s=>{FLOW=s.exists?s.data():null;fixFlow();renderFlow();});
   db.doc('flow/lottery').onSnapshot(s=>{LOT=s.exists?s.data():null;render();});
-  db.doc('flow/cards').onSnapshot(s=>{const L=s.exists&&s.data().list?s.data().list:null;const LL=L?L.filter(x=>x.decide!=='不邀'):null;const W=L?L.filter(x=>!x.decide).length:0;$('cardN').textContent=L?`${W?`待討論 ${W} 筆・`:''}要寄 ${LL.length} 張・已寄出 ${LL.filter(x=>x.sent).length} 張・郵寄 ${LL.filter(x=>x.how==='郵寄').length} 張可列印信封標籤`:'58 張（打開後會自動建立名單）';});
+  db.doc('flow/cards').onSnapshot(s=>{const L=s.exists&&s.data().list?s.data().list:null;const dd=x=>{const i=x.inv&&INV.find(v=>v.id===x.inv);return i?({yes:'邀請',no:'不邀'}[i.boss]||''):(x.decide||'');};const LL=L?L.filter(x=>dd(x)!=='不邀'):null;const W=L?L.filter(x=>!dd(x)).length:0;$('cardN').textContent=L?`${W?`待討論 ${W} 筆・`:''}要寄 ${LL.length} 張・已寄出 ${LL.filter(x=>x.sent).length} 張・郵寄 ${LL.filter(x=>x.how==='郵寄').length} 張可列印信封標籤`:'58 張（打開後會自動建立名單）';});
   db.doc('check/flow').onSnapshot(s=>{CHK=s.exists?{...s.data()}:{};renderFlow();});
   db.collection('invites').onSnapshot(q=>{INV=q.docs.map(d=>({...d.data(),id:d.id})).map(i=>i.group==='協力廠商'?{...i,group:'協力廠商/同行'}:i);render();});
   db.collection('sp').onSnapshot(q=>{SP=q.docs.map(d=>({...d.data(),id:d.id}));render();});
