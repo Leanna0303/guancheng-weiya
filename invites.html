@@ -622,7 +622,7 @@ function editDlg(i){const isNew=!i;i=i?clone(i):{id:'m'+Date.now().toString(36),
    <div class="f"><label for="e_ct">邀請對象</label><input id="e_ct" value="${esc(i.contact)}" placeholder="例：徐享偉經理"></div>
    <div class="f"><label for="e_vip">今年高層人員／備註</label><textarea id="e_vip" rows="2" style="width:100%;font:inherit" placeholder="例：洪堯鴻 營業總經理、高建發 營業總經理、坐主桌">${esc(i.vip!=null?i.vip:(i.lyNote||''))}</textarea><div class="muted" style="font-size:13px;margin-top:2px">${i.vip==null&&i.lyNote?'目前帶入的是去年的資料，改成今年的職稱、人員後儲存。':'職稱或人員有異動就改這裡；去年的紀錄會保留。'}</div></div>
    <div class="f"><label for="e_g">分類</label><select id="e_g">${gl.map(g=>`<option ${g===i.group?'selected':''}>${esc(g)}</option>`).join('')}</select></div>
-   <div class="f"><label for="e_ch">邀請方式</label><select id="e_ch">${['LINE','紙本','親送','電話'].map(c=>`<option ${c===i.channel?'selected':''}>${c}</option>`).join('')}</select></div>
+   <div class="f"><label for="e_ch">邀請方式</label><select id="e_ch">${['LINE','LINE＋紙本卡','紙本','親送','電話'].map(c=>`<option ${c===i.channel?'selected':''}>${c}</option>`).join('')}</select><div class="muted" style="font-size:13px;margin-top:2px">選「紙本」「親送」「LINE＋紙本卡」的會出現在紙本邀請卡名單</div></div>
    <div class="f"><label for="e_addr">地址／電話</label><input id="e_addr" value="${esc([i.addr,i.fax].filter(Boolean).join('　'))}"></div>
    <div class="f"><label for="e_ly">去年紀錄</label><input id="e_ly" value="${esc(lyText(i))}" placeholder="例：去年 3 人・贊助 微波爐"></div>
    <div class="f"><label for="e_brand">代表品牌</label><input id="e_brand" value="${esc(i.brand||'')}" placeholder="例：國際牌、日立（同品牌會排在一起）" list="brandList"><datalist id="brandList">${['日立','國際牌','東元','聲寶','大金','禾聯','LG','三洋','大同','冰點','奇美','歌林','萬士益','惠而浦','元山'].map(b=>`<option value="${b}">`).join('')}</datalist></div>

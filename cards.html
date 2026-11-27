@@ -224,7 +224,8 @@ const invOf=x=>x.inv?INV.get(x.inv):null;
 const B2D={yes:'邀請',no:'不邀'};
 const dec=x=>{const i=invOf(x);return i?(B2D[i.boss]||''):(x.decide||'');};
 // 名冊把邀請方式改成 LINE 等非紙本 → 不寄紙本卡
-const paperOK=x=>{const i=invOf(x);return !i||!i.channel||i.channel==='紙本';};
+const isPaperCh=c=>!c||/紙本|親送/.test(c);
+const paperOK=x=>{const i=invOf(x);return !i||isPaperCh(i.channel);};
 const live=x=>dec(x)!=='不邀'&&paperOK(x);
 const nrm=t=>String(t||'').replace(/[\s　]/g,'').replace(/股份有限公司|有限公司|公司/g,'').replace(/[（(].*?[)）]/g,'');
 const share=(a,b)=>{a=nrm(a);b=nrm(b);for(let k=0;k+2<=a.length;k++)if(b.includes(a.slice(k,k+2)))return true;return false;};
@@ -240,7 +241,7 @@ function autoLink(){if(!C||!invReady)return;let ch=false;const used=new Set(C.li
     if(c.length===1){x.inv=c[0].id;used.add(c[0].id);ch=true;}});
   // 名冊裡選「紙本」但這裡還沒有的，自動加進來
   const G={'政商':'政商','教育界':'教育界','廠牌高層':'廠牌高層'};
-  [...INV.values()].filter(i=>i.channel==='紙本'&&!used.has(i.id)).forEach(i=>{C.list.push({id:'r'+i.id,inv:i.id,group:G[i.group]||'其他',unit:i.unit,person:i.contact||'',addr:i.addr||'',ly:i.lyCount??'',note:'',how:i.addr?'郵寄':'親送',sent:!!i.sent,sentAt:'',fromRoster:true});used.add(i.id);ch=true;});
+  [...INV.values()].filter(i=>i.channel&&isPaperCh(i.channel)&&!used.has(i.id)).forEach(i=>{C.list.push({id:'r'+i.id,inv:i.id,group:G[i.group]||'其他',unit:i.unit,person:i.contact||'',addr:i.addr||'',ly:i.lyCount??'',note:'',how:/親送/.test(i.channel)?'親送':i.addr?'郵寄':'親送',sent:!!i.sent,sentAt:'',fromRoster:true});used.add(i.id);ch=true;});
   if(ch)save();}
 async function setInv(i,patch){const x={...i,...patch,updatedAt:Date.now()};INV.set(x.id,x);render();try{await DB.collection('invites').doc(x.id).set(x);}catch(_){toast('名冊沒有存到，請檢查網路');}}
 function render(){if(!C)return;const ALL=C.list,L=ALL.filter(live);
@@ -256,7 +257,7 @@ function render(){if(!C)return;const ALL=C.list,L=ALL.filter(live);
     return `<tr class="grp"><td colspan="10">${g}　<span style="font-family:var(--body);font-size:14px;color:var(--muted);font-weight:500">${its.length} 張</span></td></tr>`+its.map(x=>{n++;const d=dec(x);return `<tr data-id="${x.id}" class="${x.sent?'sent':''} ${d==='不邀'||!paperOK(x)?'off':''}">
       <td class="no">${n}</td>
       <td><select data-f="decide" class="dec ${d==='邀請'?'d-yes':d==='不邀'?'d-no':'d-wait'}" aria-label="今年是否邀請"><option value="" ${!d?'selected':''}>待討論</option><option ${d==='邀請'?'selected':''}>邀請</option><option ${d==='不邀'?'selected':''}>不邀</option></select></td>
-      <td class="u"><textarea rows="1" data-f="unit" aria-label="單位">${esc(x.unit)}</textarea>${invOf(x)?(paperOK(x)?`<div class="lk ok" title="要不要邀請以邀請名冊為準">🔗 名冊：${esc(invOf(x).unit)}</div>`:`<div class="lk warn">🔗 名冊改成「${esc(invOf(x).channel)}」，不寄紙本 <button class="lk" data-paper="${x.id}">改回紙本</button></div>`):`<button class="lk" data-link="${x.id}">未連到名冊・連結</button>`}</td>
+      <td class="u"><textarea rows="1" data-f="unit" aria-label="單位">${esc(x.unit)}</textarea>${invOf(x)?(paperOK(x)?`<div class="lk ok" title="要不要邀請以邀請名冊為準">🔗 名冊：${esc(invOf(x).unit)}${invOf(x).channel&&invOf(x).channel!=='紙本'?`（${esc(invOf(x).channel)}）`:''}</div>`:`<div class="lk warn">🔗 名冊改成「${esc(invOf(x).channel)}」，不寄紙本 <button class="lk" data-paper="${x.id}" data-ch="紙本">改回紙本</button><button class="lk" data-paper="${x.id}" data-ch="${/LINE/.test(invOf(x).channel)?'LINE＋紙本卡':'紙本'}">${/LINE/.test(invOf(x).channel)?'LINE 也要寄卡':''}</button></div>`):`<button class="lk" data-link="${x.id}">未連到名冊・連結</button>`}</td>
       <td><textarea rows="1" data-f="person" aria-label="收件人">${esc(x.person)}</textarea></td>
       <td><select data-f="how" aria-label="寄送方式">${HOW.map(h=>`<option ${h===x.how?'selected':''}>${h}</option>`).join('')}</select></td>
       <td class="a"><textarea rows="1" data-f="addr" placeholder="${x.how==='郵寄'?'郵遞區號＋地址':x.how==='轉交'?'轉交給誰':''}" aria-label="地址">${esc(x.addr)}</textarea></td>
@@ -285,7 +286,7 @@ function linkDlg(x){const o=document.createElement('div');o.className='ovl';o.in
   $('lNo').onclick=()=>{x.noLink=true;delete x.inv;close();render();save();};
   $('ll').onclick=e=>{const b=e.target.closest('[data-pick]');if(!b)return;C.list.forEach(y=>{if(y.inv===b.dataset.pick)delete y.inv;});x.inv=b.dataset.pick;x.manual=true;delete x.noLink;close();render();save();toast('已連結，邀請與否以名冊為準');};}
 document.addEventListener('click',e=>{const t=e.target.closest('button');if(!t)return;
-  if(t.dataset.paper){const x=C&&C.list.find(y=>y.id===t.dataset.paper);const i=x&&invOf(x);if(i){setInv(i,{channel:'紙本'});toast(`${i.unit} 的邀請方式已改回紙本`);}return;}
+  if(t.dataset.paper){const x=C&&C.list.find(y=>y.id===t.dataset.paper);const i=x&&invOf(x);if(i){const ch=t.dataset.ch||'紙本';setInv(i,{channel:ch});toast(`${i.unit} 的邀請方式改成「${ch}」，會寄紙本卡`);}return;}
   if(t.dataset.link){const x=C&&C.list.find(y=>y.id===t.dataset.link);if(x)linkDlg(x);return;}
   if(t.dataset.tab){tab=t.dataset.tab;render();return;}
   if(t.dataset.del){if(!t.dataset.arm){t.dataset.arm=1;t.textContent='確定刪除？';return;}C.list=C.list.filter(y=>y.id!==t.dataset.del);render();save();return;}});
