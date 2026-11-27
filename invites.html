@@ -248,6 +248,7 @@ table.lg{width:100%;border-collapse:collapse;font-size:15.9px;min-width:980px}
 .yr.now{background:var(--ok-pale);color:var(--ok)}
 .mv{display:inline-flex;gap:3px;margin-right:8px;vertical-align:middle}
 .mv button{min-height:32px;min-width:32px;padding:0 6px;font-size:15px;border-radius:8px}
+#skipBtn.on{background:var(--ink);border-color:var(--ink);color:var(--paper)}
 #ordBtn.on{background:var(--lacquer);border-color:var(--lacquer);color:var(--on-lacquer)}
 tr.ordr td{background:color-mix(in srgb,var(--gold-pale) 25%,var(--sheet))}
 .lg .n{font-family:var(--num);font-size:20.9px;font-weight:600;text-align:center;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1;white-space:nowrap}
@@ -364,7 +365,7 @@ tr.ordr td{background:color-mix(in srgb,var(--gold-pale) 25%,var(--sheet))}
     </div>
     <div class="cats" id="chips" role="group" aria-label="分類"></div>
     <div class="ctl2"><div class="legend"><span><i style="background:var(--gold-line)"></i>待老闆確認</span><span><i style="background:var(--ink-2);opacity:.35"></i>待發送</span><span><i style="background:var(--warn)"></i>等回覆</span><span><i style="background:var(--ok)"></i>已回覆</span></div>
-      <button class="ghost" id="allStages" data-filt="all" hidden>× 顯示全部進度</button><button id="ordBtn" data-w>↕ 調整順序</button><div class="vt" role="group" aria-label="顯示方式"><button id="vTable">表格</button><button id="vCard">卡片</button></div></div>
+      <button class="ghost" id="allStages" data-filt="all" hidden>× 顯示全部進度</button><button id="skipBtn" data-filt="skip">🗂 不邀請名單</button><button id="ordBtn" data-w>↕ 調整順序</button><div class="vt" role="group" aria-label="顯示方式"><button id="vTable">表格</button><button id="vCard">卡片</button></div></div>
   </div>
 
   <div id="list"></div>
@@ -425,7 +426,7 @@ function render(){
       <span class="sb" aria-hidden="true"><i class="g4" style="width:${c('replied')/tot*100}%"></i><i class="g3" style="width:${c('wait')/tot*100}%"></i><i class="g2" style="width:${c('send')/tot*100}%"></i><i class="g1" style="width:${c('boss')/tot*100}%"></i></span>
       <small>${ppl?`確定 ${ppl} 位・`:''}${c('replied')}/${L.length} 已回覆</small></button>`;};
   $('chips').innerHTML=catCard('',all,'全部分類')+gs.map(g=>{const list=all.filter(i=>i.group===g);return (filt==='all'||inF.some(i=>i.group===g)||fgSel===g)?catCard(g,list,g):'';}).join('');
-  $('vTable').classList.toggle('on',viewMode==='table');$('allStages').hidden=filt==='all';$('vCard').classList.toggle('on',viewMode==='card');
+  $('vTable').classList.toggle('on',viewMode==='table');$('allStages').hidden=filt==='all';{const n=all.filter(i=>stage(i)==='skip').length;$('skipBtn').textContent=filt==='skip'?`✓ 不邀請名單（${n}）`:`🗂 不邀請名單（${n}）`;$('skipBtn').classList.toggle('on',filt==='skip');}$('vCard').classList.toggle('on',viewMode==='card');
   const q=S_($('q').value).toLowerCase(),fg=fgSel;
   const shown=all.filter(i=>(filt==='all'?stage(i)!=='skip':stage(i)===filt)&&(!fg||i.group===fg)&&(!q||[i.unit,i.contact,i.names,i.lyNames].join(' ').toLowerCase().includes(q)));
   const byG=new Map();shown.forEach(i=>{if(!byG.has(i.group))byG.set(i.group,[]);byG.get(i.group).push(i);});
@@ -435,7 +436,7 @@ function render(){
     const head=`<h2>${esc(g)}<span>${its.length} 筆${ly?`・去年 ${ly} 位`:''}${ppl?`・今年確定 ${ppl} 位`:''}</span></h2>`;
     return viewMode==='table'?`<section class="grp">${head}<div class="tw"><table class="lg"><thead><tr><th style="width:21%">單位</th><th style="width:15%">邀請對象</th><th style="width:5%;text-align:center">去年</th><th style="width:18%">去年贊助・今年高層／備註</th><th style="width:19%">今年進度</th><th style="text-align:right">操作</th></tr></thead><tbody>${its.map(trHTML).join('')}</tbody></table></div></section>`
       :`<section class="grp">${head}<div class="sheet">${its.map(rowHTML).join('')}</div></section>`;}).join('')
-    :`<div class="sheet"><div class="empty">${INV.size?(filt==='wait'?'<b>目前沒有等待回覆的單位</b>發出的邀請都有回音了。':filt==='boss'?'<b>名單都確認好了</b>可以到「待發送」開始發邀請。':'<b>這個條件下沒有資料</b>換個分類或清掉搜尋試試。'):(live?'<b>還沒有名單</b>按「＋ 新增邀請」加入第一筆。':'<b>名冊載入中…</b>')}</div></div>`;
+    :`<div class="sheet"><div class="empty">${INV.size?(filt==='skip'?'<b>目前沒有不邀請的單位</b>按「不邀」的單位會放在這裡，資料都保留，隨時可以改回邀請。':filt==='wait'?'<b>目前沒有等待回覆的單位</b>發出的邀請都有回音了。':filt==='boss'?'<b>名單都確認好了</b>可以到「待發送」開始發邀請。':'<b>這個條件下沒有資料</b>換個分類或清掉搜尋試試。'):(live?'<b>還沒有名單</b>按「＋ 新增邀請」加入第一筆。':'<b>名冊載入中…</b>')}</div></div>`;
   document.querySelectorAll('[data-w]').forEach(b=>b.hidden=!canWrite);
   if(bossOpen)renderBoss();
 }
@@ -445,7 +446,7 @@ function lyText(i){const a=[];if(i.lyCount!=null)a.push(`去年 ${i.lyCount} 人
 function parts(i){const st=stage(i);const w=canWrite;
   let state='',acts='';
   if(st==='boss'){state='<span class="stamp p-boss">待老闆確認</span>';acts=w?`<button class="ok" data-boss="${i.id}" data-v="yes">✓ 邀請</button><button class="no" data-boss="${i.id}" data-v="no">不邀</button><button class="ghost" data-reply="${i.id}" title="已經口頭或 LINE 回覆了">已回覆？</button>`:'';}
-  else if(st==='skip'){state=`<span class="stamp p-skip">不邀請</span>${i.bossNote?esc(i.bossNote):''}`;acts=w?`<button class="ghost" data-boss="${i.id}" data-v="pending">改回待確認</button>`:'';}
+  else if(st==='skip'){state=`<span class="stamp p-skip">今年不邀</span>${i.bossNote?esc(i.bossNote):''}`;acts=w?`<button class="ok" data-boss="${i.id}" data-v="yes">改成邀請</button><button class="ghost" data-boss="${i.id}" data-v="pending">改回待確認</button>`:'';}
   else if(st==='send'){state=`<span class="stamp p-send">待發送</span><span class="meta">${esc(i.channel||'')}</span>`;
     acts=w?`<button data-msg="${i.id}" data-k="invite">寫邀請訊息</button><button class="ok" data-sent="${i.id}">✓ 已發送</button><button class="ghost" data-reply="${i.id}" title="已經口頭或 LINE 回覆了">已回覆？</button><button class="ghost" data-boss="${i.id}" data-v="pending" title="退回「老闆確認」">改回待確認</button>`:'';}
   else if(st==='wait'){const d=days(i.sentAt);const r=(i.reminders||[]).length;
