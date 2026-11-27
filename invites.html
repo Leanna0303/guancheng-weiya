@@ -244,6 +244,8 @@ table.lg{width:100%;border-collapse:collapse;font-size:15.9px;min-width:980px}
 .lg tbody tr:hover td{background:color-mix(in srgb,var(--gold-pale) 40%,var(--sheet))}
 .lg .u b{font-family:var(--display);font-size:17.7px}
 .lg .u .tag{margin-left:4px}
+.yr{display:inline-block;font-size:11.5px;font-weight:700;border-radius:6px;padding:0 5px;margin-right:5px;background:var(--sunk);color:var(--muted);vertical-align:1px}
+.yr.now{background:var(--ok-pale);color:var(--ok)}
 .mv{display:inline-flex;gap:3px;margin-right:8px;vertical-align:middle}
 .mv button{min-height:32px;min-width:32px;padding:0 6px;font-size:15px;border-radius:8px}
 #ordBtn.on{background:var(--lacquer);border-color:var(--lacquer);color:var(--on-lacquer)}
@@ -431,13 +433,14 @@ function render(){
   $('list').innerHTML=order.length?order.map(g=>{const its=byG.get(g).sort(ordCmp);
     const ppl=its.filter(i=>!i.merge&&i.reply==='yes').reduce((a,i)=>a+people(i),0),ly=its.reduce((a,i)=>a+(Number(i.lyCount)||0),0);
     const head=`<h2>${esc(g)}<span>${its.length} 筆${ly?`・去年 ${ly} 位`:''}${ppl?`・今年確定 ${ppl} 位`:''}</span></h2>`;
-    return viewMode==='table'?`<section class="grp">${head}<div class="tw"><table class="lg"><thead><tr><th style="width:21%">單位</th><th style="width:15%">邀請對象</th><th style="width:5%;text-align:center">去年</th><th style="width:18%">去年贊助／備註</th><th style="width:19%">今年進度</th><th style="text-align:right">操作</th></tr></thead><tbody>${its.map(trHTML).join('')}</tbody></table></div></section>`
+    return viewMode==='table'?`<section class="grp">${head}<div class="tw"><table class="lg"><thead><tr><th style="width:21%">單位</th><th style="width:15%">邀請對象</th><th style="width:5%;text-align:center">去年</th><th style="width:18%">去年贊助・今年高層／備註</th><th style="width:19%">今年進度</th><th style="text-align:right">操作</th></tr></thead><tbody>${its.map(trHTML).join('')}</tbody></table></div></section>`
       :`<section class="grp">${head}<div class="sheet">${its.map(rowHTML).join('')}</div></section>`;}).join('')
     :`<div class="sheet"><div class="empty">${INV.size?(filt==='wait'?'<b>目前沒有等待回覆的單位</b>發出的邀請都有回音了。':filt==='boss'?'<b>名單都確認好了</b>可以到「待發送」開始發邀請。':'<b>這個條件下沒有資料</b>換個分類或清掉搜尋試試。'):(live?'<b>還沒有名單</b>按「＋ 新增邀請」加入第一筆。':'<b>名冊載入中…</b>')}</div></div>`;
   document.querySelectorAll('[data-w]').forEach(b=>b.hidden=!canWrite);
   if(bossOpen)renderBoss();
 }
-function lyHTML(i){const a=[];if(i.lyCount!=null)a.push(`<span><em>去年</em>${i.lyCount} 人</span>`);if(i.lyGift)a.push(`<span><em>贊助</em>${esc(i.lyGift)}</span>`);if(i.lyNote)a.push(`<span>${esc(i.lyNote)}</span>`);return a.join('');}
+const vipOf=i=>i.vip!=null?i.vip:(i.lyNote||'');
+function lyHTML(i){const a=[];if(i.lyCount!=null)a.push(`<span><em>去年</em>${i.lyCount} 人</span>`);if(i.lyGift)a.push(`<span><em>贊助</em>${esc(i.lyGift)}</span>`);if(vipOf(i))a.push(`<span><em>${i.vip!=null?'今年':'去年'}</em>${esc(vipOf(i))}</span>`);return a.join('');}
 function lyText(i){const a=[];if(i.lyCount!=null)a.push(`去年 ${i.lyCount} 人`);if(i.lyGift)a.push(`贊助 ${i.lyGift}`);if(i.lyNote)a.push(i.lyNote);return a.join('・');}
 function parts(i){const st=stage(i);const w=canWrite;
   let state='',acts='';
@@ -458,7 +461,7 @@ function rowHTML(i){const {st,state,acts,w}=parts(i);
    <div class="state">${state.includes('class="line"')?state:`<div class="line">${state}</div>`}</div><div class="acts">${acts}${w?`<button class="ghost" data-edit="${i.id}" aria-label="編輯 ${esc(i.unit)}">編輯</button>`:''}</div></div>`;}
 
 function trHTML(i){const {st,state,acts,w}=parts(i);
-  const ly2=[i.lyGift?`<div class="sm">${esc(i.lyGift)}</div>`:'',i.lyNote?`<div class="mt">${esc(i.lyNote)}</div>`:''].join('');
+  const ly2=[i.lyGift?`<div class="sm"><span class="yr">去年贊助</span>${esc(i.lyGift)}</div>`:'',vipOf(i)?`<div class="mt"><span class="yr ${i.vip!=null?'now':''}">${i.vip!=null?'今年':'去年'}</span>${esc(vipOf(i))}</div>`:''].join('');
   return `<tr${ordMode?' class="ordr"':''}><td class="u">${ordMode&&canWrite?`<span class="mv"><button data-mv="top" data-mid="${i.id}" title="移到這類最前面" aria-label="移到最前面">⤒</button><button data-mv="-1" data-mid="${i.id}" aria-label="往上">↑</button><button data-mv="1" data-mid="${i.id}" aria-label="往下">↓</button><button data-mv="end" data-mid="${i.id}" title="移到這類最後面" aria-label="移到最後面">⤓</button></span>`:''}<b>${esc(i.unit)}</b>${i.brand?`<span class="tag" style="border-color:var(--gold-line);color:var(--gold)">${esc(i.brand)}</span>`:''}${i.src==='網站報名'||i.src==='網站新報名'?'<span class="tag new">網站</span>':''}${i.channel?`<span class="tag">${esc(i.channel)}</span>`:''}</td>
    <td class="sm">${esc(i.contact)}</td><td class="n">${i.lyCount!=null?i.lyCount:'<span class="mt">—</span>'}</td><td>${ly2||'<span class="mt">—</span>'}</td>
    <td class="state">${state.includes('class="line"')?state:`<div class="line">${state}</div>`}</td>
@@ -517,7 +520,7 @@ function renderBoss(){
     b.disabled=true;const n=await bulkBoss(L,'yes');toast(`${n} 筆設為邀請`);};
   $('bPrint').onclick=printDlg;
 }
-const PCOLS=[['contact','聯絡人'],['count','去年人數'],['names','去年出席名單'],['gift','去年贊助'],['note','備註'],['box','邀請／不邀 勾選'],['memo','老闆備註（空白欄）']];
+const PCOLS=[['contact','聯絡人'],['count','去年人數'],['names','去年出席名單'],['gift','去年贊助'],['note','今年高層／備註'],['box','邀請／不邀 勾選'],['memo','老闆備註（空白欄）']];
 function printDlg(){
   let pc={contact:1,count:1,names:1,gift:0,note:1,box:1,memo:0,size:'dense'};try{Object.assign(pc,JSON.parse(localStorage.getItem('kc37-pcols')||'{}'));}catch(_){}
   const n={pending:[...INV.values()].filter(i=>stage(i)==='boss').length,all:[...INV.values()].length};
@@ -547,9 +550,9 @@ function registerHTML(list,o){
     return `<tr><td class="no">${n}</td><td class="u"><b>${esc(i.unit)}</b>${o.contact&&i.contact?`<div class="ct">${esc(i.contact)}</div>`:''}${i.merge?`<div class="sm">回覆併入「${esc(i.merge)}」</div>`:''}</td>
      ${o.count?`<td class="c">${i.lyCount!=null?`<b>${i.lyCount}</b>`:'<span class="sm">—</span>'}</td>`:''}
      ${o.names?`<td class="nm">${esc(names)}</td>`:''}${o.gift?`<td class="gf">${esc(i.lyGift)}</td>`:''}
-     ${o.note?`<td class="nt">${esc(i.lyNote)}</td>`:''}
+     ${o.note?`<td class="nt">${esc(vipOf(i))}</td>`:''}
      ${o.box?`<td class="bx">${status(i)==='邀請'?'☑':'☐'}</td><td class="bx">${status(i)==='不邀'?'☑':'☐'}</td>`:''}${o.memo?'<td class="memo"></td>':''}</tr>`;}).join('');
-  const head=`<tr><th class="no">#</th><th class="uh">單位／邀請對象</th>${o.count?'<th class="c">去年<br>人數</th>':''}${o.names?'<th>去年出席名單</th>':''}${o.gift?'<th>去年贊助</th>':''}${o.note?'<th>備註</th>':''}${o.box?'<th class="bx">邀請</th><th class="bx">不邀</th>':''}${o.memo?'<th class="memo">老闆備註</th>':''}</tr>`;
+  const head=`<tr><th class="no">#</th><th class="uh">單位／邀請對象</th>${o.count?'<th class="c">去年<br>人數</th>':''}${o.names?'<th>去年出席名單</th>':''}${o.gift?'<th>去年贊助</th>':''}${o.note?'<th>今年高層／備註</th>':''}${o.box?'<th class="bx">邀請</th><th class="bx">不邀</th>':''}${o.memo?'<th class="memo">老闆備註</th>':''}</tr>`;
   // in multi-column layout every column gets its own header row
   const tbl=its=>{if(!MC)return `<table><thead>${head}</thead><tbody>${rows(its)}</tbody></table>`;
     const per=Math.ceil(its.length/NC),parts=[];for(let k=0;k<its.length;k+=per)parts.push(its.slice(k,k+per));
@@ -616,6 +619,7 @@ function editDlg(i){const isNew=!i;i=i?clone(i):{id:'m'+Date.now().toString(36),
   openDlg(`<h3>${isNew?'新增邀請':'編輯邀請'}</h3>
    <div class="f"><label for="e_unit">單位名稱</label><input id="e_unit" value="${esc(i.unit)}" placeholder="例：日立、和美國小"></div>
    <div class="f"><label for="e_ct">邀請對象</label><input id="e_ct" value="${esc(i.contact)}" placeholder="例：徐享偉經理"></div>
+   <div class="f"><label for="e_vip">今年高層人員／備註</label><textarea id="e_vip" rows="2" style="width:100%;font:inherit" placeholder="例：洪堯鴻 營業總經理、高建發 營業總經理、坐主桌">${esc(i.vip!=null?i.vip:(i.lyNote||''))}</textarea><div class="muted" style="font-size:13px;margin-top:2px">${i.vip==null&&i.lyNote?'目前帶入的是去年的資料，改成今年的職稱、人員後儲存。':'職稱或人員有異動就改這裡；去年的紀錄會保留。'}</div></div>
    <div class="f"><label for="e_g">分類</label><select id="e_g">${gl.map(g=>`<option ${g===i.group?'selected':''}>${esc(g)}</option>`).join('')}</select></div>
    <div class="f"><label for="e_ch">邀請方式</label><select id="e_ch">${['LINE','紙本','親送','電話'].map(c=>`<option ${c===i.channel?'selected':''}>${c}</option>`).join('')}</select></div>
    <div class="f"><label for="e_addr">地址／電話</label><input id="e_addr" value="${esc([i.addr,i.fax].filter(Boolean).join('　'))}"></div>
@@ -633,6 +637,7 @@ function editDlg(i){const isNew=!i;i=i?clone(i):{id:'m'+Date.now().toString(36),
     Object.assign(i,{brand:S_($('e_brand').value),unit:u,contact:S_($('e_ct').value),group:$('e_g').value,channel:$('e_ch').value,merge:S_($('e_merge').value)});
     const ad=S_($('e_addr').value);if(ad!==[i.addr,i.fax].filter(Boolean).join('　')){i.addr=ad;i.fax='';}
     if(lyChanged){i.lyNote=S_($('e_ly').value);i.lyCount=null;i.lyGift='';}
+    {const v=S_($('e_vip').value);if(i.vip!=null||v!==(i.lyNote||''))i.vip=v;}
     if($('e_sent')){const s=$('e_sent').checked;if(s&&!i.sent)i.sentAt=today();i.sent=s;}
     if($('e_boss'))i.boss=$('e_boss').value;
     closeDlg();await save(i);toast('已儲存');};
@@ -821,7 +826,7 @@ $('bXlsx').onclick=async()=>{
   const tr=ov.getRow(r);tr.values=['合計',tot.n,tot.boss,tot.send,tot.wait,tot.replied,tot.skip,tot.ppl,tot.ly];
   tr.eachCell((cell,ci)=>{cell.font={name:'微軟正黑體',size:12,bold:true,color:{argb:red}};cell.alignment={horizontal:ci===1?'left':'center',indent:ci===1?1:0};cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:pale}};cell.border={top:{style:'medium',color:{argb:gold}}};});tr.height=26;
   // ---------- 2. 邀請名冊（依分類分段） ----------
-  const cols=[['單位',22],['邀請對象',24],['品牌',9],['方式',7],['進度',11],['發送日',12],['今年回覆',10],['人數',6],['今年名單',34],['去年人數',8],['去年贊助',30],['備註',30],['電話／地址',24]];
+  const cols=[['單位',22],['邀請對象',24],['品牌',9],['方式',7],['進度',11],['發送日',12],['今年回覆',10],['人數',6],['今年名單',34],['去年人數',8],['去年贊助',30],['今年高層／備註',30],['電話／地址',24]];
   const ws=wb.addWorksheet('邀請名冊',{views:[{state:'frozen',ySplit:4,showGridLines:false}],pageSetup:{paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,margins:{left:.3,right:.3,top:.4,bottom:.5,header:.2,footer:.2}},headerFooter:{oddFooter:'&C第 &P 頁，共 &N 頁'}});
   ws.columns=cols.map(([,w])=>({width:w}));
   title(ws,'冠成家電尾牙　邀請名冊',cols.length);head(ws,4,cols.map(c=>c[0]));
@@ -830,7 +835,7 @@ $('bXlsx').onclick=async()=>{
   [...new Set(all.map(i=>i.group))].forEach(g=>{const its=all.filter(i=>i.group===g);
     ws.mergeCells(r,1,r,cols.length);const gc=ws.getCell(r,1);gc.value=`${g}　${its.length} 筆`;gc.font={name:'微軟正黑體',size:12,bold:true,color:{argb:red}};gc.fill={type:'pattern',pattern:'solid',fgColor:{argb:pale}};gc.border={bottom:{style:'thin',color:{argb:gold}}};gc.alignment={vertical:'middle',indent:1};ws.getRow(r).height=24;r++;
     its.forEach(i=>{const st=stage(i);const rep=i.merge?`併入 ${i.merge}`:i.reply==='yes'?'出席':i.reply==='no'?'不克出席':'';
-      const row=ws.getRow(r);row.values=[i.unit,i.contact,i.brand||'',i.channel||'',L[st],i.sentAt||'',rep,i.reply==='yes'?Number(i.count)||'':'',S_(i.names),i.lyCount??'',S_(i.lyGift),[i.note,i.lyNote].filter(Boolean).join('；'),[i.fax,i.addr].filter(Boolean).join('　')];
+      const row=ws.getRow(r);row.values=[i.unit,i.contact,i.brand||'',i.channel||'',L[st],i.sentAt||'',rep,i.reply==='yes'?Number(i.count)||'':'',S_(i.names),i.lyCount??'',S_(i.lyGift),[i.note,vipOf(i)].filter(Boolean).join('；'),[i.fax,i.addr].filter(Boolean).join('　')];
       row.eachCell({includeEmpty:true},(cell,ci)=>{cell.font={name:'微軟正黑體',size:11,bold:ci===1};cell.alignment={vertical:'top',wrapText:true,horizontal:[4,5,6,7,8,10].includes(ci)?'center':'left'};cell.border={bottom:hair};});
       const sc=row.getCell(5);sc.fill={type:'pattern',pattern:'solid',fgColor:{argb:FILL[st]}};sc.font={name:'微軟正黑體',size:11,bold:true,color:{argb:FONT[st]}};
       if(i.reply==='yes'){row.getCell(7).font={name:'微軟正黑體',size:11,bold:true,color:{argb:FONT.replied}};}
