@@ -230,6 +230,7 @@ const live=x=>dec(x)!=='不邀'&&paperOK(x);
 const nrm=t=>String(t||'').replace(/[\s　]/g,'').replace(/股份有限公司|有限公司|公司/g,'').replace(/[（(].*?[)）]/g,'');
 const share=(a,b)=>{a=nrm(a);b=nrm(b);for(let k=0;k+2<=a.length;k++)if(b.includes(a.slice(k,k+2)))return true;return false;};
 function autoLink(){if(!C||!invReady)return;let ch=false;const used=new Set(C.list.map(x=>x.inv).filter(Boolean));
+  {const n=C.list.length;C.list=C.list.filter(x=>{const i=x.fromRoster&&INV.get(x.inv);return !(i&&/員工|公益/.test(i.group||''));});if(C.list.length!==n)ch=true;}
   const SG=['政商','教育界','廠牌高層'];
   // 自動配對只在同一分類裡找（廠牌高層不會配到廠商）；手動連結的不動
   C.list.forEach(x=>{const i=x.inv&&INV.get(x.inv);if(x.inv&&(!i||(!x.manual&&SG.includes(x.group)&&i.group!==x.group))){used.delete(x.inv);delete x.inv;ch=true;}});
@@ -241,7 +242,7 @@ function autoLink(){if(!C||!invReady)return;let ch=false;const used=new Set(C.li
     if(c.length===1){x.inv=c[0].id;used.add(c[0].id);ch=true;}});
   // 名冊裡選「紙本」但這裡還沒有的，自動加進來
   const G={'政商':'政商','教育界':'教育界','廠牌高層':'廠牌高層'};
-  [...INV.values()].filter(i=>i.channel&&isPaperCh(i.channel)&&!used.has(i.id)).forEach(i=>{C.list.push({id:'r'+i.id,inv:i.id,group:G[i.group]||'其他',unit:i.unit,person:i.contact||'',addr:i.addr||'',ly:i.lyCount??'',note:'',how:/親送/.test(i.channel)?'親送':i.addr?'郵寄':'親送',sent:!!i.sent,sentAt:'',fromRoster:true});used.add(i.id);ch=true;});
+  [...INV.values()].filter(i=>i.channel&&isPaperCh(i.channel)&&!used.has(i.id)&&!(C.skip||[]).includes(i.id)&&!/員工|公益/.test(i.group||'')).forEach(i=>{C.list.push({id:'r'+i.id,inv:i.id,group:G[i.group]||'其他',unit:i.unit,person:i.contact||'',addr:i.addr||'',ly:i.lyCount??'',note:'',how:/親送/.test(i.channel)?'親送':i.addr?'郵寄':'親送',sent:!!i.sent,sentAt:'',fromRoster:true});used.add(i.id);ch=true;});
   if(ch)save();}
 async function setInv(i,patch){const x={...i,...patch,updatedAt:Date.now()};INV.set(x.id,x);render();try{await DB.collection('invites').doc(x.id).set(x);}catch(_){toast('名冊沒有存到，請檢查網路');}}
 function render(){if(!C)return;const ALL=C.list,L=ALL.filter(live);
@@ -250,7 +251,8 @@ function render(){if(!C)return;const ALL=C.list,L=ALL.filter(live);
   $('kpis').innerHTML=[[nW,'待討論',nW?'warn':'ok'],[nY,'確定邀請','ok'],[nN,'不邀'],...(nP?[[nP,'名冊改成 LINE 等']]:[]),[L.length,'紙本卡張數','gold'],[L.length-sent,'還沒寄出',L.length-sent?'warn':'ok'],[sent,'已寄出','ok'],[by('郵寄'),'郵寄'],[ly,'去年出席人數']]
     .map(([v,l,c])=>`<div class="kpi ${c||''}"><b>${v}</b><span>${l}</span></div>`).join('');
   const nMail=by('郵寄');
-  $('need').innerHTML=(nW?`還有 <b>${nW}</b> 筆待討論，可以按「列印討論清單」帶去跟老闆勾選。`:'')+`扣掉不邀的，共需 <b>${L.length}</b> 張紙本邀請卡（郵寄 ${nMail} 張需要信封標籤）。到大中華領 <b>80</b> 份，寄完還有 <b>${80-L.length}</b> 份備用。`;
+  const sk=(C.skip||[]).map(k=>INV.get(k)).filter(Boolean);
+  $('need').innerHTML=(sk.length?`<div style="margin-bottom:6px;font-size:14px">已從紙本名單移除（名冊不變）：${sk.map(i=>`${esc(i.unit)} <button class="lk" data-unskip="${i.id}">加回</button>`).join('、')}</div>`:'')+(nW?`還有 <b>${nW}</b> 筆待討論，可以按「列印討論清單」帶去跟老闆勾選。`:'')+`扣掉不邀的，共需 <b>${L.length}</b> 張紙本邀請卡（郵寄 ${nMail} 張需要信封標籤）。到大中華領 <b>80</b> 份，寄完還有 <b>${80-L.length}</b> 份備用。`;
   $('tabs').innerHTML=[['all','全部 '+ALL.length],['wait','待討論 '+nW]].concat(nP?[['np','名冊不是紙本 '+nP]]:[]).concat(GR.map(g=>[g,g+' '+ALL.filter(x=>x.group===g).length])).map(([k,l])=>`<button data-tab="${k}" class="${tab===k?'on':''}">${esc(l)}</button>`).join('');
   let n=0;
   $('tb').innerHTML=GR.filter(g=>tab==='all'||tab==='wait'||tab==='np'||tab===g).map(g=>{const its=ALL.filter(x=>x.group===g&&(tab!=='wait'||(!dec(x)&&paperOK(x)))&&(tab!=='np'||!paperOK(x)));if(!its.length)return'';
@@ -289,7 +291,8 @@ document.addEventListener('click',e=>{const t=e.target.closest('button');if(!t)r
   if(t.dataset.paper){const x=C&&C.list.find(y=>y.id===t.dataset.paper);const i=x&&invOf(x);if(i){const ch=t.dataset.ch||'紙本';setInv(i,{channel:ch});toast(`${i.unit} 的邀請方式改成「${ch}」，會寄紙本卡`);}return;}
   if(t.dataset.link){const x=C&&C.list.find(y=>y.id===t.dataset.link);if(x)linkDlg(x);return;}
   if(t.dataset.tab){tab=t.dataset.tab;render();return;}
-  if(t.dataset.del){if(!t.dataset.arm){t.dataset.arm=1;t.textContent='確定刪除？';return;}C.list=C.list.filter(y=>y.id!==t.dataset.del);render();save();return;}});
+  if(t.dataset.del){if(!t.dataset.arm){t.dataset.arm=1;t.textContent='確定刪除？';return;}const x=C.list.find(y=>y.id===t.dataset.del);if(x&&x.inv){C.skip=[...new Set((C.skip||[]).concat(x.inv))];}C.list=C.list.filter(y=>y.id!==t.dataset.del);render();save();toast(x&&x.inv?`已從紙本名單移除「${x.unit}」，邀請名冊那筆不受影響`:'已刪除');return;}
+  if(t.dataset.unskip){C.skip=(C.skip||[]).filter(k=>k!==t.dataset.unskip);autoLink();render();save();return;}});
 $('addBtn').onclick=()=>{if(!C)return;const g=tab==='all'?'政商':tab;C.list.push({id:'c'+Date.now().toString(36),group:g,unit:'',person:'',addr:'',ly:'',note:'',how:'郵寄'});
   const L=C.list;const last=L.pop();const k=L.map(x=>x.group).lastIndexOf(g);L.splice(k+1,0,last);render();save();
   setTimeout(()=>{const r=document.querySelector(`tr[data-id="${last.id}"] input`);r&&r.focus();},50);};
