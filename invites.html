@@ -464,13 +464,46 @@ function trHTML(i){const {st,state,acts,w}=parts(i);
    <td class="state">${state.includes('class="line"')?state:`<div class="line">${state}</div>`}</td>
    <td class="ac">${acts}${w?`<button class="ghost" data-edit="${i.id}" aria-label="編輯 ${esc(i.unit)}">編輯</button>`:''}</td></tr>`;}
 // ---------- boss mode ----------
+// ---------- 批次設定邀請／不邀 ----------
+// save many decisions at once (one round of writes, one redraw)
+async function bulkBoss(list,v){const xs=list.map(i=>{const x=clone(INV.get(i.id)||i);x.boss=v;x.updatedAt=Date.now();INV.set(x.id,{...x,_justDecided:true});return x;});
+  renderBoss();render();if(!db)return xs.length;
+  try{await Promise.all(xs.map(x=>{const {_justDecided,...b}=x;return db.collection('invites').doc(x.id).set(b);}));return xs.length;}catch(_){toast('有部分沒存到，請檢查網路後再按一次');return 0;}}
+const nrm=t=>String(t||'').replace(/[\s　]/g,'').replace(/股份有限公司|有限公司|企業社|公司|先生|小姐|女士/g,'').replace(/[（(].*?[)）]/g,'').toLowerCase();
+function matchLine(line){const k=nrm(line);if(k.length<2)return[];
+  const all=[...INV.values()];
+  const exact=all.filter(i=>nrm(i.unit)===k||nrm(i.brand)===k);if(exact.length)return exact;
+  return all.filter(i=>{const u=nrm(i.unit),c=nrm(i.contact);return (u.length>=2&&(u.includes(k)||k.includes(u)))||(c&&k.length>=2&&c.includes(k));});}
+function pasteDlg(){
+  openDlg(`<h3>📋 貼上名單批次設定</h3>
+   <p class="sub">把討論好的名單貼進來（從 LINE、Excel、記事本都可以），一行一個單位或人名，也可以用逗號、頓號分開。系統會自動找出名冊裡對應的單位，確認後一次設定。</p>
+   <div class="f"><label for="pv">要設成</label><select id="pv"><option value="no">✗ 不邀</option><option value="yes">✓ 邀請</option></select></div>
+   <textarea id="pt" class="msgbox" style="min-height:150px" placeholder="例如：\n日立\n大同\n和美鎮公所、林庚壬\n新庄國小"></textarea>
+   <div id="pr"></div>
+   <div class="acts" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button id="dCancel">取消</button><button id="pFind">找出對應單位</button><button class="primary" id="pGo" disabled>套用</button></div>`);
+  $('dCancel').onclick=closeDlg;
+  let hits=[];
+  $('pFind').onclick=()=>{const lines=$('pt').value.split(/[\n,，、;；]+/).map(x=>x.trim()).filter(Boolean);if(!lines.length){toast('請先貼上名單');return;}
+    const seen=new Set();hits=[];const miss=[],multi=[];
+    lines.forEach(l=>{const m=matchLine(l);if(!m.length)miss.push(l);else{if(m.length>1)multi.push(l);m.forEach(i=>{if(!seen.has(i.id)){seen.add(i.id);hits.push({i,from:l,on:m.length===1});}});}});
+    const v=$('pv').value;
+    $('pr').innerHTML=`<div style="margin:6px 0;font-size:15px">找到 <b>${hits.length}</b> 筆${miss.length?`・<span style="color:var(--warn)">找不到 ${miss.length} 筆</span>`:''}${multi.length?`・${multi.length} 行對到多筆（請勾選要的）`:''}</div>
+      <div style="max-height:min(40vh,380px);overflow:auto;border:1px solid var(--hair);border-radius:12px">${hits.map((h,k)=>`<label style="display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px;padding:8px 12px;border-top:1px solid var(--hair);cursor:pointer"><input type="checkbox" data-ph="${k}" ${h.on?'checked':''} style="width:20px;height:20px"><span><b>${esc(h.i.unit)}</b> <span class="muted" style="font-size:13.5px">${esc(h.i.group)}・${esc(h.i.contact||'')}・目前：${h.i.boss==='yes'?'邀請':h.i.boss==='no'?'不邀':'待確認'}　←「${esc(h.from)}」</span></span></label>`).join('')}</div>
+      ${miss.length?`<p class="sub" style="color:var(--warn);margin-top:6px">找不到：${miss.map(esc).join('、')}（名冊裡沒有，或名稱差太多；可以改成單位全名再找一次，或用「新增邀請」加進名冊）</p>`:''}`;
+    $('pGo').disabled=!hits.length;$('pGo').textContent=`套用：${v==='no'?'不邀':'邀請'}`;};
+  $('pv').onchange=()=>{if(hits.length)$('pGo').textContent=`套用：${$('pv').value==='no'?'不邀':'邀請'}`;};
+  $('pGo').onclick=async()=>{const pick=hits.filter((h,k)=>document.querySelector(`[data-ph="${k}"]`).checked).map(h=>h.i);if(!pick.length){toast('沒有勾選任何單位');return;}
+    const v=$('pv').value;$('pGo').disabled=true;const n=await bulkBoss(pick,v);closeDlg();
+    const rest=[...INV.values()].filter(i=>stage(i)==='boss').length;
+    toast(`${n} 筆設為${v==='no'?'不邀':'邀請'}${rest?`；還有 ${rest} 筆待確認，可按「剩下的全部邀請」`:''}`);};
+}
 function renderBoss(){
   const all=[...INV.values()].filter(i=>bossAll||stage(i)==='boss'||i._justDecided).sort(ordCmp);
   const byG=new Map();all.forEach(i=>{if(!byG.has(i.group))byG.set(i.group,[]);byG.get(i.group).push(i);});
   const pending=[...INV.values()].filter(i=>stage(i)==='boss').length;
   const order=[...byG.keys()].sort((a,b)=>(GROUPS.indexOf(a)+99)%99-(GROUPS.indexOf(b)+99)%99);
   $('bossIn').innerHTML=`<div class="top"><div><h2>確認邀請名單</h2><div class="muted">跟老闆討論後，在這裡逐筆按「邀請」或「不邀」，會自動儲存。還有 <b class="num" style="color:var(--gold);font-size:19px">${pending}</b> 筆待確認。</div></div>
-    <div class="acts"><label class="muted" style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="bAll" ${bossAll?'checked':''}>顯示已確認的</label><button id="bPrint">列印 A4 名冊</button><button class="primary" id="bClose">完成</button></div></div>
+    <div class="acts"><label class="muted" style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="bAll" ${bossAll?'checked':''}>顯示已確認的</label><button id="bPaste">📋 貼上名單批次設定</button>${canWrite?`<button class="ok" id="bRest">剩下的全部邀請</button>`:''}<button id="bPrint">列印 A4 名冊</button><button class="primary" id="bClose">完成</button></div></div>
    ${order.length?order.map(g=>{const its=byG.get(g);const pend=its.filter(i=>stage(i)==='boss');
      return `<section class="grp"><h2>${esc(g)}<span>${its.length} 筆${canWrite&&pend.length>1?` <button class="ok" style="min-height:28px;padding:2px 10px;font-size:13px" data-bossall="${esc(g)}">這類全部邀請</button>`:''}</span></h2>
      <div class="sheet">${its.map(i=>`<div class="brow"><div class="who"><div class="u"><b>${esc(i.unit)}</b></div>${i.contact?`<div class="ct">${esc(i.contact)}</div>`:''}${lyHTML(i)?`<div class="ly">${lyHTML(i)}</div>`:''}</div>
@@ -478,6 +511,10 @@ function renderBoss(){
      :'<div class="sheet"><div class="empty"><b>全部都確認好了</b>可以按「完成」回到名冊。</div></div>'}`;
   $('bClose').onclick=()=>{bossOpen=false;INV.forEach(i=>delete i._justDecided);$('boss').hidden=true;render();};
   $('bAll').onchange=e=>{bossAll=e.target.checked;renderBoss();};
+  $('bPaste').onclick=pasteDlg;
+  if($('bRest'))$('bRest').onclick=async e=>{const b=e.target;const L=[...INV.values()].filter(i=>stage(i)==='boss');if(!L.length){toast('沒有待確認的了');return;}
+    if(!b.dataset.arm){b.dataset.arm=1;b.textContent=`確定 ${L.length} 筆都邀請？再按一次`;setTimeout(()=>{if(document.body.contains(b)){delete b.dataset.arm;b.textContent='剩下的全部邀請';}},6000);return;}
+    b.disabled=true;const n=await bulkBoss(L,'yes');toast(`${n} 筆設為邀請`);};
   $('bPrint').onclick=printDlg;
 }
 const PCOLS=[['contact','聯絡人'],['count','去年人數'],['names','去年出席名單'],['gift','去年贊助'],['note','備註'],['box','邀請／不邀 勾選'],['memo','老闆備註（空白欄）']];
